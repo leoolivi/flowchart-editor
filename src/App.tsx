@@ -1,23 +1,27 @@
-import { useCallback, useRef } from 'react';
-import { ReactFlow, addEdge, Background, useNodesState, useEdgesState, reconnectEdge } from '@xyflow/react';
+import { useCallback, useRef, useState } from 'react';
+import { ReactFlow, addEdge, Background, useNodesState, useEdgesState, reconnectEdge, type Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { TextUpdaterNode } from './components/TextUpdaterNode';
 import DeclarationNode from './components/DeclarationNode';
- 
-const initialNodes = [
-  { id: 'n1', position: { x: 0, y: 0 }, data: { label: 'Inizio' }, type: 'input' },
-  { id: 'n2', position: { x: 0, y: 100 }, data: { label: 'Fine' }, type: 'output' }
-];
-const initialEdges = [{ id: 'n1-n2', source: 'n1', target: 'n2' }];
+import { FlowchartNodeType, type FlowchartGraph } from './types/graph';
+import StartNode from './components/StartNode';
+import EndNode from './components/EndNode';
 
 const nodeTypes = {
-  textUpdater: TextUpdaterNode,
-  declarationBlock: DeclarationNode
+  start: StartNode,
+  end: EndNode,
+  declaration: DeclarationNode
+
 };
 
 export default function App() {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [nodeGraph, setNodeGraph] = useState<FlowchartGraph>({nodes: [
+    {id: 'start', type: FlowchartNodeType.START, position: {x: 100, y: 100}, data: {content: 'Start'}},
+    {id: 'end', type: FlowchartNodeType.END, position: {x: 100, y: 200}, data: {content: 'End'}},
+  ], edges: [
+    {id: 'e1-2', source: 'start', target: 'end', type: 'default', data: {label: 'Edge from start to end'}}
+  ], metadata: {name: 'untitled', createdAt: new Date(), updatedAt: new Date(), version: '1.0'}});
+  const [nodes, setNodes, onNodesChange] = useNodesState(nodeGraph.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(nodeGraph.edges);
   const edgeReconnectSuccessful = useRef(true);
 
   const onConnect = useCallback(
@@ -66,7 +70,6 @@ export default function App() {
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            snapToGrid
             nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
