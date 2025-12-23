@@ -25,6 +25,7 @@ export default class NodeGraph {
         }
         this.nodes.splice(index, 0, node);
         this.updateIndices();
+        this.cleanUpGraph();
         return this;
     }
 
@@ -34,6 +35,13 @@ export default class NodeGraph {
 
     removeNodeById(id: string): NodeGraph {
         this.nodes = this.nodes.filter(node => node.id !== id);
+        this.updateIndices();
+        return this;
+    }
+
+    cleanUpGraph(): NodeGraph {
+        this.nodes = this.nodes.map((node) => ({ ...node, position: { x: 250, y: 100 * node.index! } }));
+        this.nodes.at(-1)!.position.y += 50; // Move last node down for visibility
         this.updateIndices();
         return this;
     }

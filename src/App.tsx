@@ -16,19 +16,13 @@ const FlowNodeTypes = {
 
 export default function App() {
   const [nodeGraph, setNodeGraph] = useState<NodeGraph>(new NodeGraph([
-    {id:'node-0', type: FlowNodeType.START, position: { x: 250, y: 5 }, data: { value: 'Start' }, index: 0},
-    {id:'node-1', type: FlowNodeType.END, position: { x: 250, y: 200 }, data: { value: 'End' }, index: 1},
+    {id:'ns', type: FlowNodeType.START, position: { x: 250, y: 5 }, data: { value: 'Start' }, index: 0},
+    {id:'ne', type: FlowNodeType.END, position: { x: 250, y: 200 }, data: { value: 'End' }, index: 1},
   ]));
 
   const graph = Renderer.returnGraph(nodeGraph);
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges);
-
-  useEffect(() => {
-    let graph = Renderer.returnGraph(nodeGraph);
-    setNodes(graph.nodes);
-    setEdges(graph.edges);
-  }, [nodeGraph]);
   
   const edgeReconnectSuccessful = useRef(true);
 
@@ -54,15 +48,18 @@ export default function App() {
     edgeReconnectSuccessful.current = true;
   }, []);
 
-  const onAddNode = useCallback((type: string) => {
+  const onAddNode = useCallback((type: FlowNodeType) => {
     console.log("Adding node of type:", type);
     const newNode = {
       id: `n${nodes.length + 1}`,
-      type: FlowNodeType[type.toLowerCase() as keyof typeof FlowNodeType],
+      type: type,
       position: { x: Math.random() * 400, y: Math.random() * 400 },
       data: { value: `Node ${nodes.length + 1}` },
     };
-    setNodeGraph(prevGraph => prevGraph.addNode(newNode));
+    setNodeGraph(nodeGraph.addNodeAt(1, newNode));
+    let graph = Renderer.returnGraph(nodeGraph);
+    setNodes(graph.nodes);
+    setEdges(graph.edges);
   }, [nodes.length]);
  
   return (
@@ -72,7 +69,7 @@ export default function App() {
       </div>
       <div className='flex'>
         <div className='border min-w-50 flex flex-col gap-4 p-4'>
-          <button className='rounded-lg bg-purple-400 px-5 py-3' onClick={() => onAddNode('definition')}>Definition</button>
+          <button className='rounded-lg bg-purple-400 px-5 py-3' onClick={() => onAddNode(FlowNodeType.DEFINITION)}>Definition</button>
         </div>
         <div className='w-full h-screen'>
           <ReactFlow
@@ -93,8 +90,4 @@ export default function App() {
       </div>
     </>
   );
-}
-
-function setNodes(arg0: (nds: any[]) => any[]) {
-  throw new Error('Function not implemented.');
 }

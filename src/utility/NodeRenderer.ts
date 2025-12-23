@@ -8,12 +8,13 @@ class NodeRenderer {
         let edges: Edge[] = [];
 
         console.log("Rendering graph:", graph);
+        console.log("Graph edges:", edges);
 
         graph.nodes.forEach((node, index) => {
 
             console.log("Processing node:", node.type.toString().toLowerCase());
             nodes.push({...node, type: node.type.toString().toLowerCase()});
-            index != 0 ? edges.push(
+            (index != 0 && index < nodes.length) ? edges.push(
                 {id: `e${index}`, source: nodes.at(index - 1)!.id, target: node.id}
             ) : null;
         });
