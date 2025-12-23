@@ -1,11 +1,11 @@
-import type { FlowchartGraph } from "../types/graph";
+import NodeGraph from "../models/NodeGraph";
 
 class NodeSerializer {
-    public serializeGraph(graph: FlowchartGraph): string {
+    public serializeGraph(graph: NodeGraph): string {
     return JSON.stringify(graph);
     }
 
-    public deserializeGraph(json: string): FlowchartGraph {
+    public deserializeGraph(json: string): NodeGraph {
         // parsing + validazione
         const graph = JSON.parse(json);
         // validateGraph(graph); // lancia errore se invalido
