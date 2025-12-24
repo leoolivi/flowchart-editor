@@ -7,9 +7,13 @@ import { Renderer } from './utility/NodeRenderer';
 import DefinitionNode from './components/DefinitionNode';
 import StartNode from './components/StartNode';
 import EndNode from './components/EndNode';
+import DecisionNode from './components/DecisionNode';
+import MergeNode from './components/MergeNode';
 
 const FlowNodeTypes = {
   definition: DefinitionNode,
+  decision: DecisionNode,
+  merge: MergeNode,
   start: StartNode,
   end: EndNode
 };
@@ -65,11 +69,12 @@ export default function App() {
   return (
     <>
       <div className='w-full border text-center p-4'>
-        Topbar
+        Topbar (Work in Progress)
       </div>
       <div className='flex'>
         <div className='border min-w-50 flex flex-col gap-4 p-4'>
           <button className='rounded-lg bg-purple-400 px-5 py-3' onClick={() => onAddNode(FlowNodeType.DEFINITION)}>Definition</button>
+          <button className='rounded-lg bg-green-400 px-5 py-3' onClick={() => onAddNode(FlowNodeType.DECISION)}>Decision</button>
         </div>
         <div className='w-full h-screen'>
           <ReactFlow

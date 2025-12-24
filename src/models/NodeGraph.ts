@@ -1,13 +1,28 @@
 import type { Node } from '@xyflow/react';
 
 export default class NodeGraph {
-    nodes: FlowNode[];
+    nodes: FlowNode[] = [];
     private idCounter: number = 0;
 
     constructor(nodes: FlowNode[]) {
         this.nodes = nodes;
         this.idCounter = Math.max(0, ...this.nodes.map(n => parseInt(n.id.replace('node-', '')) || 0));
         this.updateIndices();
+    }
+
+    createEmptyDecisionNodeAndMerge(): FlowNode {
+        const decisionNode: FlowNode = {
+            id: `node-${++this.idCounter}`,
+            type: FlowNodeType.DECISION,
+            position: { x: 250, y: 100 * this.nodes.length },
+            data: {
+                value: 'Decision',
+                condition: '',
+                trueBranch: new NodeGraph([]),
+                falseBranch: new NodeGraph([])
+            }
+        };
+        return decisionNode;
     }
 
     addNode(node: FlowNode): NodeGraph {
@@ -67,8 +82,8 @@ export interface FlowNode extends Node {
         variableValue?: string;
         variablesList?: string[];
         condition?: string;
-        trueBranch?: NodeGraph[];
-        falseBranch?: NodeGraph[];
+        trueBranch?: NodeGraph;
+        falseBranch?: NodeGraph;
         loopType?: LoopType;
     };
 }
