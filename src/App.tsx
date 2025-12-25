@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ReactFlow, addEdge, Background, useNodesState, useEdgesState, reconnectEdge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import NodeGraph from './models/NodeGraph';
@@ -19,16 +19,27 @@ const FlowNodeTypes = {
 };
 
 export default function App() {
-  const [nodeGraph, setNodeGraph] = useState<NodeGraph>(new NodeGraph([
+  const [nodeGraph, setNodeGraph] = useState<NodeGraph>(() => new NodeGraph([
     {id:'ns', type: FlowNodeType.START, position: { x: 250, y: 5 }, data: { value: 'Start' }, index: 0},
     {id:'ne', type: FlowNodeType.END, position: { x: 250, y: 200 }, data: { value: 'End' }, index: 1},
   ]));
 
-  const graph = Renderer.returnGraph(nodeGraph);
+  const graph = useMemo(() => {
+    console.log("Generating graph from nodeGraph:", nodeGraph);
+    return Renderer.returnGraph(nodeGraph);
+  }, [nodeGraph]);
+
+  
+
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges);
   
   const edgeReconnectSuccessful = useRef(true);
+
+  useEffect(() => {
+    setNodes(graph.nodes);
+    setEdges(graph.edges);
+  }, [graph]);
 
   const onConnect = useCallback(
     (params: any) => setEdges((edgesSnapshot) => addEdge(params, edgesSnapshot)),
@@ -54,17 +65,29 @@ export default function App() {
 
   const onAddNode = useCallback((type: FlowNodeType) => {
     console.log("Adding node of type:", type);
-    const newNode = {
-      id: `n${nodes.length + 1}`,
-      type: type,
-      position: { x: Math.random() * 400, y: Math.random() * 400 },
-      data: { value: `Node ${nodes.length + 1}` },
-    };
-    setNodeGraph(nodeGraph.addNodeAt(1, newNode));
-    let graph = Renderer.returnGraph(nodeGraph);
-    setNodes(graph.nodes);
-    setEdges(graph.edges);
-  }, [nodes.length]);
+    if (type !== FlowNodeType.DECISION) {
+      setNodeGraph((prevGraph) => {
+        const newNode = {
+          id: `node-${prevGraph['idCounter'] + 1}`,
+          type: type,
+          position: { x: 250, y: 100 * prevGraph.nodes.length },
+          data: { 
+            value: type.toString().charAt(0),
+          }
+        };
+        const updatedGraph = new NodeGraph([...prevGraph.nodes]);
+        return updatedGraph.addNodeAt(prevGraph.nodes.length - 1, newNode);
+      });
+    } else {
+      setNodeGraph((prevGraph) => {
+        const { decisionNode, mergeNode } = prevGraph.createEmptyDecisionNodeAndMerge();
+        const updatedGraph = new NodeGraph([...prevGraph.nodes]);
+        updatedGraph.addNodeAt(prevGraph.nodes.length - 2, decisionNode);
+        updatedGraph.addNodeAt(prevGraph.nodes.length - 1, mergeNode);
+        return updatedGraph;
+      });
+    }
+  }, []);
  
   return (
     <>
