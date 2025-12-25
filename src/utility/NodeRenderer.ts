@@ -22,15 +22,15 @@ class NodeRenderer {
             } else if (graphNode.type == FlowNodeType.DECISION) {
                 console.log("Processing decision node:", graphNode);
                 nodes.push({...graphNode, type: graphNode.type.toString().toLowerCase()});
-                let trueBranch = this.returnGraph(graphNode.data.trueBranch ?? new NodeGraph());
+                let trueBranch = this.returnGraph(graphNode.data.trueBranch ?? new NodeGraph([]));
                 let falseBranch = this.returnGraph(graphNode.data.falseBranch ?? new NodeGraph([]));
                 
                 // Connect decision node to true branch start
-                edges.push(
+                nodes.length != 0 && edges.push(
                     {id: `${graphNode.id}-true`, source: graphNode.id, target: trueBranch.nodes[0].id, label: 'True'}
                 );
                 // Connect decision node to false branch start
-                edges.push(
+                nodes.length != 0 && edges.push(
                     {id: `${graphNode.id}-false`, source: graphNode.id, target: falseBranch.nodes[0].id, label: 'False'}
                 );
                 

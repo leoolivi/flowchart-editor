@@ -10,7 +10,7 @@ export default class NodeGraph {
         this.updateIndices();
     }
 
-    createEmptyDecisionNodeAndMerge(): FlowNode {
+    createEmptyDecisionNodeAndMerge(): any {
         const decisionNode: FlowNode = {
             id: `node-${++this.idCounter}`,
             type: FlowNodeType.DECISION,
@@ -22,7 +22,17 @@ export default class NodeGraph {
                 falseBranch: new NodeGraph([])
             }
         };
-        return decisionNode;
+        return {decisionNode: decisionNode, mergeNode: this.createMergeNode()};
+    }
+
+    createMergeNode(): FlowNode {
+        const mergeNode: FlowNode = {
+            id: `node-${++this.idCounter}`,
+            type: FlowNodeType.MERGE,
+            position: { x: 250, y: 100 * (this.nodes.length + 1) },
+            data: { value: 'Merge' }
+        };
+        return mergeNode;
     }
 
     addNode(node: FlowNode): NodeGraph {
