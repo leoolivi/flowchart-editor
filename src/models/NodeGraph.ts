@@ -2,17 +2,36 @@ import type { Node } from '@xyflow/react';
 
 export default class NodeGraph {
     nodes: FlowNode[] = [];
-    private idCounter: number = 0;
+    static idCounter: number = 1;
+
+    static incrementIdCounter() {
+        this.idCounter += 1;
+        return this.idCounter;
+    }
+
+    decrementIdCounter() {
+        NodeGraph.idCounter -= 1;
+        return NodeGraph.idCounter;
+    }
 
     constructor(nodes: FlowNode[]) {
         this.nodes = nodes;
-        this.idCounter = Math.max(0, ...this.nodes.map(n => parseInt(n.id.replace('node-', '')) || 0));
+        NodeGraph.idCounter = Math.max(0, ...this.nodes.map(n => parseInt(n.id.replace('node-', '')) || 0));
         this.updateIndices();
+    }
+    createMergeNode(): FlowNode {
+        const mergeNode: FlowNode = {
+            id: `node-${++NodeGraph.idCounter}`,
+            type: FlowNodeType.MERGE,
+            position: { x: 250, y: 100 * (this.nodes.length + 1) },
+            data: { value: 'Merge' }
+        };
+        return mergeNode;
     }
 
     createEmptyDecisionNodeAndMerge(): any {
         const decisionNode: FlowNode = {
-            id: `node-${++this.idCounter}`,
+            id: `node-${++NodeGraph.idCounter}`,
             type: FlowNodeType.DECISION,
             position: { x: 250, y: 100 * this.nodes.length },
             data: {
@@ -25,29 +44,16 @@ export default class NodeGraph {
         return {decisionNode: decisionNode, mergeNode: this.createMergeNode()};
     }
 
-    createMergeNode(): FlowNode {
-        const mergeNode: FlowNode = {
-            id: `node-${++this.idCounter}`,
-            type: FlowNodeType.MERGE,
-            position: { x: 250, y: 100 * (this.nodes.length + 1) },
-            data: { value: 'Merge' }
-        };
-        return mergeNode;
-    }
-
+    
     addNode(node: FlowNode): NodeGraph {
-        if (!node.id) {
-            node.id = `node-${++this.idCounter}`;
-        }
+        node.id = `node-${++NodeGraph.idCounter}`;
         node.index = this.nodes.length;
         this.nodes.push(node);
         return this;
     }
 
     addNodeAt(index: number, node: FlowNode): NodeGraph {
-        if (!node.id) {
-            node.id = `node-${++this.idCounter}`;
-        }
+        node.id = `node-${NodeGraph.incrementIdCounter()}`;
         this.nodes.splice(index, 0, node);
         this.updateIndices();
         this.cleanUpGraph();
@@ -69,6 +75,10 @@ export default class NodeGraph {
         this.nodes.at(-1)!.position.y += 50; // Move last node down for visibility
         this.updateIndices();
         return this;
+    }
+    
+    at(index: number): FlowNode | undefined {
+        return this.nodes[index];
     }
 
     private updateIndices(): NodeGraph {

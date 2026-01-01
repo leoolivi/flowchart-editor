@@ -11,7 +11,7 @@ class NodeRenderer {
         
         graph.nodes.forEach((graphNode, index) => {
             
-            if (graphNode.type != FlowNodeType.DECISION && graphNode.type != FlowNodeType.LOOP) {
+            if (graphNode.type != FlowNodeType.DECISION && graphNode.type != FlowNodeType.LOOP  && graphNode.type != FlowNodeType.MERGE) {
                 // console.log("Processing node:", graphNode.type.toString().toLowerCase());
                 nodes.push({...graphNode, type: graphNode.type.toString().toLowerCase()});
                 
@@ -26,24 +26,37 @@ class NodeRenderer {
                 let falseBranch = this.returnGraph(graphNode.data.falseBranch ?? new NodeGraph([]));
                 
                 // Connect decision node to true branch start
-                nodes.length != 0 && edges.push(
-                    {id: `${graphNode.id}-true`, source: graphNode.id, target: trueBranch.nodes[0].id, label: 'True'}
-                );
+                if (trueBranch.nodes.length > 0) { 
+                    edges.push(
+                        {id: `${graphNode.id}-true`, source: graphNode.id, sourceHandle: 'true', target: trueBranch.nodes[0].id ?? graph.at(index + 1), label: 'True'}
+                    );
+                    // Add true branch nodes and edges
+                    trueBranch.nodes.forEach((node) => nodes.push(node));
+                    trueBranch.edges.forEach((edge) => edges.push(edge));
+                }
                 // Connect decision node to false branch start
-                nodes.length != 0 && edges.push(
-                    {id: `${graphNode.id}-false`, source: graphNode.id, target: falseBranch.nodes[0].id, label: 'False'}
-                );
+                if (falseBranch.nodes.length > 0) { 
+                    edges.push(
+                        {id: `${graphNode.id}-false`, source: graphNode.id, target: falseBranch.nodes[0].id, label: 'False'}
+                    );
+                    // Add false branch nodes and edges
+                    falseBranch.nodes.forEach((node) => nodes.push(node));
+                    falseBranch.edges.forEach((edge) => edges.push(edge));
+                }
+
                 
-                // Add true branch nodes and edges
-                trueBranch.nodes.forEach((node) => nodes.push(node));
-                trueBranch.edges.forEach((edge) => edges.push(edge));
-                
-                // Add false branch nodes and edges
-                falseBranch.nodes.forEach((node) => nodes.push(node));
-                falseBranch.edges.forEach((edge) => edges.push(edge)); 
+
                 // Connect previous node to decision node
-                if (index != 0 && index < nodes.length) { 
+                if (index > 0 && index < nodes.length) { 
                     edges.push({id: `e${index}`, source: nodes.at(index - 1)!.id, target: graphNode.id})
+                }
+            } else if (graphNode.type == FlowNodeType.MERGE) {
+                console.log("Processing merge node:", graphNode);
+                nodes.push({...graphNode, type: graphNode.type.toString().toLowerCase()});
+                // Connect previous node to merge node
+                if (index > 0 && index <= nodes.length) { 
+                    edges.push({id: `e${index}`, source: graph.at(index - 1)!.data.trueBranch?.at(-1)?.id!, target: graphNode.id, targetHandle: "true"});
+                    edges.push({id: `e${index}-false`, source: graph.at(index - 1)!.data.falseBranch?.at(-1)?.id!, target: graphNode.id, targetHandle: "false"});
                 }
             }
         });

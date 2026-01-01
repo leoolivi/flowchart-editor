@@ -5,8 +5,8 @@ export default function DecisionNode() {
     <div className="decision-block bg-red-400 p-5 rounded-lg border">
       Decision Node (conditional)
       <Handle type="target" position={Position.Top} />
-      <Handle type="source" position={Position.Left} id="F" />
-      <Handle type="source" position={Position.Right} id="T" />
+      <Handle type="source" position={Position.Left} id="false" />
+      <Handle type="source" position={Position.Right} id="true" />
     </div> 
   );
 }

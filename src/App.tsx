@@ -68,7 +68,7 @@ export default function App() {
     if (type !== FlowNodeType.DECISION) {
       setNodeGraph((prevGraph) => {
         const newNode = {
-          id: `node-${prevGraph['idCounter'] + 1}`,
+          id: `node-${NodeGraph.incrementIdCounter()}`,
           type: type,
           position: { x: 250, y: 100 * prevGraph.nodes.length },
           data: { 
@@ -76,7 +76,8 @@ export default function App() {
           }
         };
         const updatedGraph = new NodeGraph([...prevGraph.nodes]);
-        return updatedGraph.addNodeAt(prevGraph.nodes.length - 1, newNode);
+        updatedGraph.addNodeAt(prevGraph.nodes.length - 1, newNode)
+        return updatedGraph;
       });
     } else {
       setNodeGraph((prevGraph) => {
