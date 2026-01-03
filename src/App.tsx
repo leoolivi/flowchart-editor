@@ -29,8 +29,6 @@ export default function App() {
     return Renderer.returnGraph(nodeGraph);
   }, [nodeGraph]);
 
-  
-
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges);
   
@@ -65,47 +63,53 @@ export default function App() {
 
   const onAddNode = useCallback((type: FlowNodeType) => {
     console.log("Adding node of type:", type);
-    if (type !== FlowNodeType.DECISION) {
-      setNodeGraph((prevGraph) => {
-        const newNode = {
-          id: `node-${NodeGraph.incrementIdCounter()}`,
-          type: type,
-          position: { x: 250, y: 100 * prevGraph.nodes.length },
-          data: { 
-            value: type.toString().charAt(0),
-          }
-        };
-        const updatedGraph = new NodeGraph([...prevGraph.nodes]);
-        updatedGraph.addNodeAt(prevGraph.nodes.length - 1, newNode)
-        return updatedGraph;
-      });
-    } else {
-      setNodeGraph((prevGraph) => {
-        const newNode: FlowNode = {
-          id: `node-${NodeGraph.incrementIdCounter()}`,
-          type: type,
-          position: { x: 250, y: 100 * prevGraph.nodes.length },
-          data: { 
-            value: type.toString().charAt(0),
-            condition: '',
-            trueBranch: new NodeGraph([]),
-            falseBranch: new NodeGraph([]),
-          }
-        };
+    switch (type) {
+      case FlowNodeType.DEFINITION:
+        setNodeGraph((prevGraph) => {
+          const newNode = {
+            id: `node-${NodeGraph.incrementIdCounter()}`,
+            type: type,
+            position: { x: 250, y: 100 * prevGraph.nodes.length },
+            data: { 
+              value: type.toString().charAt(0),
+            }
+          };
+          const updatedGraph = new NodeGraph([...prevGraph.nodes]);
+          updatedGraph.addNodeAt(prevGraph.nodes.length - 1, newNode)
+          return updatedGraph;
+        });
+        break;
+      case FlowNodeType.DECISION:
+        setNodeGraph((prevGraph) => {
+          const newNode: FlowNode = {
+            id: `node-${NodeGraph.incrementIdCounter()}`,
+            type: type,
+            position: { x: 250, y: 100 * prevGraph.nodes.length },
+            data: { 
+              value: type.toString().charAt(0),
+              condition: '',
+              trueBranch: new NodeGraph([]),
+              falseBranch: new NodeGraph([]),
+            }
+          };
 
-        const newMergeNode: FlowNode = {
-          id: `node-${NodeGraph.incrementIdCounter()}`,
-          type: FlowNodeType.MERGE,
-          position: { x: 250, y: 100 * prevGraph.nodes.length },
-          data: {
-            value: "merge"
-          }
-        };
-        const updatedGraph = new NodeGraph([...prevGraph.nodes]);
-        updatedGraph.addNodeAt(prevGraph.nodes.length -1, newNode);
-        updatedGraph.addNodeAt(prevGraph.nodes.length, newMergeNode);
-        return updatedGraph;
-      });
+          const newMergeNode: FlowNode = {
+            id: `node-${NodeGraph.incrementIdCounter()}`,
+            type: FlowNodeType.MERGE,
+            position: { x: 250, y: 100 * prevGraph.nodes.length },
+            data: {
+              value: "merge"
+            }
+          };
+          const updatedGraph = new NodeGraph([...prevGraph.nodes]);
+          updatedGraph.addNodeAt(prevGraph.nodes.length -1, newNode);
+          updatedGraph.addNodeAt(prevGraph.nodes.length, newMergeNode);
+          return updatedGraph;
+        });
+        break;
+      default:
+        console.warn("Unsupported node type for addition:", type);
+        return;
     }
   }, []);
  

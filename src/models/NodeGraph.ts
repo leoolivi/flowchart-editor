@@ -9,25 +9,10 @@ export default class NodeGraph {
         return this.idCounter;
     }
 
-    decrementIdCounter() {
-        NodeGraph.idCounter -= 1;
-        return NodeGraph.idCounter;
-    }
-
     constructor(nodes: FlowNode[]) {
         this.nodes = nodes;
         NodeGraph.idCounter = Math.max(0, ...this.nodes.map(n => parseInt(n.id.replace('node-', '')) || 0));
         this.updateIndices();
-    }
-    createMergeNode(): FlowNode {
-        const mergeNode: FlowNode = {
-            id: `node-${NodeGraph.incrementIdCounter()}`,
-            type: FlowNodeType.MERGE,
-            position: { x: 250, y: 100 * (this.nodes.length + 1) },
-            data: { value: 'Merge' },
-            index: this.nodes.length
-        };
-        return mergeNode;
     }
 
     
