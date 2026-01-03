@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ReactFlow, addEdge, Background, useNodesState, useEdgesState, reconnectEdge } from '@xyflow/react';
+import { ReactFlow, addEdge, Background, useNodesState, useEdgesState, reconnectEdge, useReactFlow } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import NodeGraph, { type FlowNode } from './models/NodeGraph';
 import { FlowNodeType } from './models/NodeGraph';
@@ -9,6 +9,9 @@ import StartNode from './components/StartNode';
 import EndNode from './components/EndNode';
 import DecisionNode from './components/DecisionNode';
 import MergeNode from './components/MergeNode';
+import { DndContext } from '@dnd-kit/core';
+import DraggableBlock from './components/DraggableBlock';
+import DroppableArea from './components/DroppableArea';
 
 const FlowNodeTypes = {
   definition: DefinitionNode,
@@ -33,6 +36,8 @@ export default function App() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges);
   
   const edgeReconnectSuccessful = useRef(true);
+
+  const reactFlowInstance = useReactFlow();
 
   useEffect(() => {
     setNodes(graph.nodes);
@@ -112,34 +117,51 @@ export default function App() {
         return;
     }
   }, []);
+  
+  const onDragNode = (event: { activatorEvent?: any; active?: any; over?: any; }) => {
+    const {active, over} = event;
+
+    if (!over || over.id !== 'block') return;
+
+    const position = reactFlowInstance.screenToFlowPosition({
+      x: event.activatorEvent.clientX,
+      y: event.activatorEvent.clientY,
+    });
+
+    // TODO: Analyze edges to find if the block it's dropped over one of those and eventually add a new node between the existing nodes
+
+  }
  
   return (
-    <>
+    <DndContext onDragEnd={onDragNode}>
       <div className='w-full border text-center p-4'>
         Topbar (Work in Progress)
       </div>
       <div className='flex'>
         <div className='border min-w-50 flex flex-col gap-4 p-4'>
-          <button className='rounded-lg bg-purple-400 px-5 py-3' onClick={() => onAddNode(FlowNodeType.DEFINITION)}>Definition</button>
-          <button className='rounded-lg bg-green-400 px-5 py-3' onClick={() => onAddNode(FlowNodeType.DECISION)}>Decision</button>
+          <DraggableBlock type={FlowNodeType.DEFINITION} className="bg-purple-400" id={'1'} />
+          <DraggableBlock type={FlowNodeType.DECISION} className="bg-green-400" id={'2'} />
         </div>
         <div className='w-full h-screen'>
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={FlowNodeTypes}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onReconnect={onReconnect}
-            onReconnectStart={onReconnectStart}
-            onReconnectEnd={onReconnectEnd}
-            onConnect={onConnect}
-            fitView
-          >
-            <Background />
-          </ReactFlow>
+            <DroppableArea className="w-full h-full">
+              <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={FlowNodeTypes}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onReconnect={onReconnect}
+              onReconnectStart={onReconnectStart}
+              onReconnectEnd={onReconnectEnd}
+              onConnect={onConnect}
+              fitView
+            >
+              <Background />
+            </ReactFlow>
+            </DroppableArea>
+            
         </div>
       </div>
-    </>
+    </DndContext>
   );
 }
