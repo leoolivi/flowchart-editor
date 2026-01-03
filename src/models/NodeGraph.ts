@@ -21,34 +21,20 @@ export default class NodeGraph {
     }
     createMergeNode(): FlowNode {
         const mergeNode: FlowNode = {
-            id: `node-${++NodeGraph.idCounter}`,
+            id: `node-${NodeGraph.incrementIdCounter()}`,
             type: FlowNodeType.MERGE,
             position: { x: 250, y: 100 * (this.nodes.length + 1) },
-            data: { value: 'Merge' }
+            data: { value: 'Merge' },
+            index: this.nodes.length
         };
         return mergeNode;
     }
 
-    createEmptyDecisionNodeAndMerge(): any {
-        const decisionNode: FlowNode = {
-            id: `node-${++NodeGraph.idCounter}`,
-            type: FlowNodeType.DECISION,
-            position: { x: 250, y: 100 * this.nodes.length },
-            data: {
-                value: 'Decision',
-                condition: '',
-                trueBranch: new NodeGraph([]),
-                falseBranch: new NodeGraph([])
-            }
-        };
-        return {decisionNode: decisionNode, mergeNode: this.createMergeNode()};
-    }
-
     
     addNode(node: FlowNode): NodeGraph {
-        node.id = `node-${++NodeGraph.idCounter}`;
+        node.id = `node-${NodeGraph.incrementIdCounter()}`;
         node.index = this.nodes.length;
-        this.nodes.push(node);
+        this.nodes.splice(this.nodes.length -1, 0, node);
         return this;
     }
 
@@ -81,7 +67,7 @@ export default class NodeGraph {
         return this.nodes[index];
     }
 
-    private updateIndices(): NodeGraph {
+    updateIndices(): NodeGraph {
         this.nodes.forEach((node, i) => {
             node.index = i;
         });

@@ -2,20 +2,32 @@ import type { Edge, Node } from "@xyflow/react";
 import NodeGraph, { FlowNodeType } from "../models/NodeGraph";
 
 class NodeRenderer {
-
+    
     public returnGraph(graph: NodeGraph): ReactFlowGraph {
         let nodes: Node[] = [];
         let edges: Edge[] = [];
 
         console.log("Rendering graph:", graph);
-        
+
         graph.nodes.forEach((graphNode, index) => {
+            graphNode.index = index; // Ensure index is updated
             
-            if (graphNode.type != FlowNodeType.DECISION && graphNode.type != FlowNodeType.LOOP  && graphNode.type != FlowNodeType.MERGE) {
+            if (graphNode.type == FlowNodeType.DEFINITION || graphNode.type == FlowNodeType.START) {
                 // console.log("Processing node:", graphNode.type.toString().toLowerCase());
                 nodes.push({...graphNode, type: graphNode.type.toString().toLowerCase()});
                 
-                if (index != 0 && index < nodes.length) { 
+                if (index > 0 && index < nodes.length) { 
+                    edges.push({id: `e${index}`, source: nodes.at(index - 1)!.id, target: graphNode.id})
+                }
+                
+            } else if (graphNode.type == FlowNodeType.END) {
+                // console.log("Processing node:", graphNode.type.toString().toLowerCase());
+                nodes.push({...graphNode, type: graphNode.type.toString().toLowerCase()});
+
+                if (nodes.at(index - 1)!.type == FlowNodeType.MERGE) {
+                    console.log("Previous node is a merge node, connecting accordingly.");
+                    edges.push({id: `e${index}`, source: nodes.at(index - 1)!.id, target: graphNode.id})
+                } else {
                     edges.push({id: `e${index}`, source: nodes.at(index - 1)!.id, target: graphNode.id})
                 }
                 
@@ -44,8 +56,6 @@ class NodeRenderer {
                     falseBranch.edges.forEach((edge) => edges.push(edge));
                 }
 
-                
-
                 // Connect previous node to decision node
                 if (index > 0 && index < nodes.length) { 
                     edges.push({id: `e${index}`, source: nodes.at(index - 1)!.id, target: graphNode.id})
@@ -53,11 +63,22 @@ class NodeRenderer {
             } else if (graphNode.type == FlowNodeType.MERGE) {
                 console.log("Processing merge node:", graphNode);
                 nodes.push({...graphNode, type: graphNode.type.toString().toLowerCase()});
-                // Connect previous node to merge node
-                if (index > 0 && index <= nodes.length) { 
-                    edges.push({id: `e${index}`, source: graph.at(index - 1)!.data.trueBranch?.at(-1)?.id!, target: graphNode.id, targetHandle: "true"});
-                    edges.push({id: `e${index}-false`, source: graph.at(index - 1)!.data.falseBranch?.at(-1)?.id!, target: graphNode.id, targetHandle: "false"});
+                
+                if (graph.at(index - 1)?.type == FlowNodeType.DECISION) {
+                    if (graph.at(index - 1)?.data!.trueBranch!.nodes!.length! > 0) {
+                        edges.push({id: `e${index}-true`, source: graph.at(index - 1)!.data!.trueBranch!.nodes!.at(-1)!.id, sourceHandle: "true", target: graphNode.id, targetHandle: 'true'})
+                    } else {
+                        edges.push({id: `e${index}-true`, source: graph.at(index - 1)!.id, sourceHandle: "true", target: graphNode.id, targetHandle: 'true' })
+                    }
+                    if (graph.at(index - 1)?.data!.falseBranch!.nodes!.length! > 0) {
+                        edges.push({id: `e${index}-false`, source: graph.at(index - 1)!.data!.falseBranch!.nodes!.at(-1)!.id, sourceHandle: "false", target: graphNode.id, targetHandle: 'false'})
+                    } else {
+                        edges.push({id: `e${index}-false`, source: graph.at(index - 1)!.id, sourceHandle: "false", target: graphNode.id, targetHandle: 'false'})
+                    }
                 }
+            } else {
+                console.warn("Unknown node type encountered:", graphNode.type);
+                edges.push({id: `e${index}`, source: nodes.at(index - 1)!.id, target: graphNode.id})
             }
         });
         

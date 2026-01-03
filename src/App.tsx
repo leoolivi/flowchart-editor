@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ReactFlow, addEdge, Background, useNodesState, useEdgesState, reconnectEdge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import NodeGraph from './models/NodeGraph';
+import NodeGraph, { type FlowNode } from './models/NodeGraph';
 import { FlowNodeType } from './models/NodeGraph';
 import { Renderer } from './utility/NodeRenderer';
 import DefinitionNode from './components/DefinitionNode';
@@ -81,10 +81,29 @@ export default function App() {
       });
     } else {
       setNodeGraph((prevGraph) => {
-        const { decisionNode, mergeNode } = prevGraph.createEmptyDecisionNodeAndMerge();
+        const newNode: FlowNode = {
+          id: `node-${NodeGraph.incrementIdCounter()}`,
+          type: type,
+          position: { x: 250, y: 100 * prevGraph.nodes.length },
+          data: { 
+            value: type.toString().charAt(0),
+            condition: '',
+            trueBranch: new NodeGraph([]),
+            falseBranch: new NodeGraph([]),
+          }
+        };
+
+        const newMergeNode: FlowNode = {
+          id: `node-${NodeGraph.incrementIdCounter()}`,
+          type: FlowNodeType.MERGE,
+          position: { x: 250, y: 100 * prevGraph.nodes.length },
+          data: {
+            value: "merge"
+          }
+        };
         const updatedGraph = new NodeGraph([...prevGraph.nodes]);
-        updatedGraph.addNodeAt(prevGraph.nodes.length - 2, decisionNode);
-        updatedGraph.addNodeAt(prevGraph.nodes.length - 1, mergeNode);
+        updatedGraph.addNodeAt(prevGraph.nodes.length -1, newNode);
+        updatedGraph.addNodeAt(prevGraph.nodes.length, newMergeNode);
         return updatedGraph;
       });
     }
