@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import NodeGraph, { FlowNodeType } from "../models/NodeGraph";
+import NodeGraph, { FlowNodeType, NodeEdgeType } from "../models/NodeGraph";
 
 class NodeRenderer {
     
@@ -14,7 +14,7 @@ class NodeRenderer {
                     nodes.push({...graphNode, type: graphNode.type.toString().toLowerCase()}); // Push the definition node
                     
                     if (index > 0 && index < nodes.length) { 
-                        edges.push({id: `e${index}`, source: nodes.at(index - 1)!.id, target: graphNode.id}) // Connect previous node to current
+                        edges.push({id: `e${index}`, source: nodes.at(index - 1)!.id, target: graphNode.id, type: NodeEdgeType.default}) // Connect previous node to current
                     }
                     break;
                 case FlowNodeType.START:
@@ -22,7 +22,7 @@ class NodeRenderer {
                     break;
                 case FlowNodeType.END:
                     nodes.push({...graphNode, type: graphNode.type.toString().toLowerCase()}); // Push the end node
-                    edges.push({id: `e${index}`, source: nodes.at(index - 1)!.id, target: graphNode.id}) // Connect previous node to end node
+                    edges.push({id: `e${index}`, source: nodes.at(index - 1)!.id, target: graphNode.id, type: NodeEdgeType.default}) // Connect previous node to end node
                     break;
 
                 case FlowNodeType.DECISION:
@@ -34,7 +34,7 @@ class NodeRenderer {
                     // Connect decision node to true branch start
                     if (trueBranch.nodes.length > 0) { 
                         edges.push(
-                            {id: `${graphNode.id}-true`, source: graphNode.id, sourceHandle: 'true', target: trueBranch.nodes[0].id ?? graph.at(index + 1), label: 'True'}
+                            {id: `${graphNode.id}-true`, source: graphNode.id, sourceHandle: 'true', target: trueBranch.nodes[0].id ?? graph.at(index + 1), label: 'True', type: NodeEdgeType.default}
                         );
                         // Add true branch nodes and edges
                         trueBranch.nodes.forEach((node) => nodes.push(node));
@@ -43,7 +43,7 @@ class NodeRenderer {
                     // Connect decision node to false branch start
                     if (falseBranch.nodes.length > 0) { 
                         edges.push(
-                            {id: `${graphNode.id}-false`, source: graphNode.id, target: falseBranch.nodes[0].id, label: 'False'}
+                            {id: `${graphNode.id}-false`, source: graphNode.id, target: falseBranch.nodes[0].id, label: 'False', type: NodeEdgeType.default}
                         );
                         // Add false branch nodes and edges
                         falseBranch.nodes.forEach((node) => nodes.push(node));
@@ -52,7 +52,7 @@ class NodeRenderer {
 
                     // Connect previous node to decision node
                     if (index > 0 && index < nodes.length) { 
-                        edges.push({id: `e${index}`, source: nodes.at(index - 1)!.id, target: graphNode.id})
+                        edges.push({id: `e${index}`, source: nodes.at(index - 1)!.id, target: graphNode.id, type: NodeEdgeType.default})
                     }
                     break;
                 case FlowNodeType.MERGE:
@@ -62,15 +62,15 @@ class NodeRenderer {
                         // If the branches of the decision has nodes, connect the last node of that branch otherwise connect the decision node directly
                         
                         if (graph.at(index - 1)?.data!.trueBranch!.nodes!.length! > 0) {
-                            edges.push({id: `e${index}-true`, source: graph.at(index - 1)!.data!.trueBranch!.nodes!.at(-1)!.id, sourceHandle: "true", target: graphNode.id, targetHandle: 'true'})
+                            edges.push({id: `e${index}-true`, source: graph.at(index - 1)!.data!.trueBranch!.nodes!.at(-1)!.id, sourceHandle: "true", target: graphNode.id, targetHandle: 'true', type: NodeEdgeType.default})
                         } else {
-                            edges.push({id: `e${index}-true`, source: graph.at(index - 1)!.id, sourceHandle: "true", target: graphNode.id, targetHandle: 'true' })
+                            edges.push({id: `e${index}-true`, source: graph.at(index - 1)!.id, sourceHandle: "true", target: graphNode.id, targetHandle: 'true', type: NodeEdgeType.default})
                         }
 
                         if (graph.at(index - 1)?.data!.falseBranch!.nodes!.length! > 0) {
-                            edges.push({id: `e${index}-false`, source: graph.at(index - 1)!.data!.falseBranch!.nodes!.at(-1)!.id, sourceHandle: "false", target: graphNode.id, targetHandle: 'false'})
+                            edges.push({id: `e${index}-false`, source: graph.at(index - 1)!.data!.falseBranch!.nodes!.at(-1)!.id, sourceHandle: "false", target: graphNode.id, targetHandle: 'false', type: NodeEdgeType.default})
                         } else {
-                            edges.push({id: `e${index}-false`, source: graph.at(index - 1)!.id, sourceHandle: "false", target: graphNode.id, targetHandle: 'false'})
+                            edges.push({id: `e${index}-false`, source: graph.at(index - 1)!.id, sourceHandle: "false", target: graphNode.id, targetHandle: 'false', type: NodeEdgeType.default})
                         }
                     }
                     break;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ReactFlow, addEdge, Background, useNodesState, useEdgesState, reconnectEdge, useReactFlow } from '@xyflow/react';
+import { ReactFlow, addEdge, Background, useNodesState, useEdgesState, reconnectEdge, useReactFlow} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import NodeGraph, { type FlowNode } from './models/NodeGraph';
 import { FlowNodeType } from './models/NodeGraph';
@@ -12,6 +12,8 @@ import MergeNode from './components/MergeNode';
 import { DndContext } from '@dnd-kit/core';
 import DraggableBlock from './components/DraggableBlock';
 import DroppableArea from './components/DroppableArea';
+import { DefaultNodeEdge } from './components/NodeEdge';
+import type { Rect } from './types';
 
 const FlowNodeTypes = {
   definition: DefinitionNode,
@@ -20,6 +22,10 @@ const FlowNodeTypes = {
   start: StartNode,
   end: EndNode
 };
+
+export const NodeEdgeTypes = {
+  default: DefaultNodeEdge,
+}
 
 export default function App() {
   const [nodeGraph, setNodeGraph] = useState<NodeGraph>(() => new NodeGraph([
@@ -43,6 +49,13 @@ export default function App() {
     setNodes(graph.nodes);
     setEdges(graph.edges);
   }, [graph]);
+
+  const toScreen = (p: any) =>
+  reactFlowInstance.flowToScreenPosition({
+    x: p.x,
+    y: p.y,
+  });
+
 
   const onConnect = useCallback(
     (params: any) => setEdges((edgesSnapshot) => addEdge(params, edgesSnapshot)),
@@ -117,19 +130,111 @@ export default function App() {
         return;
     }
   }, []);
-  
-  const onDragNode = (event: { activatorEvent?: any; active?: any; over?: any; }) => {
-    const {active, over} = event;
 
-    if (!over || over.id !== 'block') return;
+  const onDragNode = (event: any) => {
+    const {active, over, activatorEvent, delta} = event;
+    
+    if (!over) return;
 
-    const position = reactFlowInstance.screenToFlowPosition({
-      x: event.activatorEvent.clientX,
-      y: event.activatorEvent.clientY,
+    const reactFlowBounds = document.querySelector('.react-flow__renderer')?.getBoundingClientRect();
+    
+    // Calcola la posizione finale aggiungendo il delta
+    const dropPosition = {
+      x: activatorEvent.clientX + delta.x,
+      y: activatorEvent.clientY + delta.y
+    };
+
+    console.log('=== DEBUG ===');
+    console.log('Initial:', {x: activatorEvent.clientX, y: activatorEvent.clientY});
+    console.log('Delta:', delta);
+    console.log('Final drop position:', dropPosition);
+
+    let insertAtIndex = -1;
+
+    nodes.forEach((node, index) => {
+      if (index === 0) return; // Salta il primo nodo
+
+      const prevNode = nodes[index - 1];
+      
+      const nodeScreenPos = reactFlowInstance.flowToScreenPosition(node.position);
+      const prevNodeScreenPos = reactFlowInstance.flowToScreenPosition(prevNode.position);
+
+      const nodeAbsolutePos = reactFlowBounds ? {
+        x: nodeScreenPos.x + reactFlowBounds.left,
+        y: nodeScreenPos.y + reactFlowBounds.top
+      } : nodeScreenPos;
+
+      const prevNodeAbsolutePos = reactFlowBounds ? {
+        x: prevNodeScreenPos.x + reactFlowBounds.left,
+        y: prevNodeScreenPos.y + reactFlowBounds.top
+      } : prevNodeScreenPos;
+
+      const TOLERANCE = 100;
+
+      const pathAreaAbsolute = {
+        x: Math.min(prevNodeAbsolutePos.x, nodeAbsolutePos.x) - TOLERANCE,
+        y: Math.min(prevNodeAbsolutePos.y, nodeAbsolutePos.y) - TOLERANCE,
+        w: Math.abs(nodeAbsolutePos.x - prevNodeAbsolutePos.x) + (TOLERANCE * 2),
+        h: Math.abs(nodeAbsolutePos.y - prevNodeAbsolutePos.y) + (TOLERANCE * 2)
+      };
+
+      const isInside = dropPosition.x >= pathAreaAbsolute.x && 
+                       dropPosition.x <= pathAreaAbsolute.x + pathAreaAbsolute.w &&
+                       dropPosition.y >= pathAreaAbsolute.y && 
+                       dropPosition.y <= pathAreaAbsolute.y + pathAreaAbsolute.h;
+
+      console.log(`Check between node ${index-1} and ${index}:`, {
+        dropPos: `(${dropPosition.x.toFixed(0)}, ${dropPosition.y.toFixed(0)})`,
+        areaX: `${pathAreaAbsolute.x.toFixed(0)} - ${(pathAreaAbsolute.x + pathAreaAbsolute.w).toFixed(0)}`,
+        areaY: `${pathAreaAbsolute.y.toFixed(0)} - ${(pathAreaAbsolute.y + pathAreaAbsolute.h).toFixed(0)}`,
+        isInside
+      });
+
+      if (isInside && insertAtIndex === -1) {
+        insertAtIndex = index;
+        console.log(`✓ SNAPPED! Will insert at index ${insertAtIndex}`);
+      }
     });
 
-    // TODO: Analyze edges to find if the block it's dropped over one of those and eventually add a new node between the existing nodes
+    // Se hai trovato una posizione valida, inserisci il nodo
+    if (insertAtIndex !== -1) {
+      const nodeType = active.data.current.type as FlowNodeType;
+      console.log(`Adding node of type ${nodeType} at index ${insertAtIndex}`);
+      
+      setNodeGraph((prevGraph) => {
+        const newNode: FlowNode = {
+          id: `node-${NodeGraph.incrementIdCounter()}`,
+          type: nodeType,
+          position: { x: 250, y: 100 * insertAtIndex },
+          data: { 
+            value: nodeType.toString().charAt(0),
+            ...(nodeType === FlowNodeType.DECISION ? {
+              condition: '',
+              trueBranch: new NodeGraph([]),
+              falseBranch: new NodeGraph([]),
+            } : {})
+          }
+        };
 
+        const updatedGraph = new NodeGraph([...prevGraph.nodes]);
+        updatedGraph.addNodeAt(insertAtIndex, newNode);
+
+        // Se è un DECISION node, aggiungi anche il MERGE
+        if (nodeType === FlowNodeType.DECISION) {
+          const newMergeNode: FlowNode = {
+            id: `node-${NodeGraph.incrementIdCounter()}`,
+            type: FlowNodeType.MERGE,
+            position: { x: 250, y: 100 * (insertAtIndex + 1) },
+            data: { value: "merge" }
+          };
+          updatedGraph.addNodeAt(insertAtIndex + 1, newMergeNode);
+        }
+
+        return updatedGraph;
+      });
+    } else {
+      console.log('✗ No valid drop position found');
+    }
   }
  
   return (
@@ -143,8 +248,9 @@ export default function App() {
           <DraggableBlock type={FlowNodeType.DECISION} className="bg-green-400" id={'2'} />
         </div>
         <div className='w-full h-screen'>
-            <DroppableArea className="w-full h-full">
+            <DroppableArea className="w-full h-full border border-red-500">
               <ReactFlow
+              edgeTypes={NodeEdgeTypes}
               nodes={nodes}
               edges={edges}
               nodeTypes={FlowNodeTypes}

@@ -106,3 +106,7 @@ export enum FlowNodeType {
     OUTPUT = 'output',
     MERGE = 'merge'
 }
+
+export enum NodeEdgeType {
+  default = 'default'
+}
