@@ -10,7 +10,7 @@ interface DraggableBlockProps {
 
 export default function DraggableBlock({type, className, id, children}: DraggableBlockProps) {
     const {attributes, listeners, setNodeRef, transform} = useDraggable({
-        id: `block-${id}`,
+        id: id,
     });
 
     return (

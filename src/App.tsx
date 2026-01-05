@@ -33,6 +33,10 @@ export default function App() {
     {id:'ne', type: FlowNodeType.END, position: { x: 250, y: 200 }, data: { value: 'End' }, index: 1},
   ]));
 
+  const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(null);
+
+  const reactFlowRef = useRef<any>(null);
+
   const graph = useMemo(() => {
     console.log("Generating graph from nodeGraph:", nodeGraph);
     return Renderer.returnGraph(nodeGraph);
@@ -49,6 +53,11 @@ export default function App() {
     setNodes(graph.nodes);
     setEdges(graph.edges);
   }, [graph]);
+
+  const styledEdges = edges.map(edge => ({
+    ...edge,
+    style: edge.id === highlightedEdgeId ? { stroke: 'red', strokeWidth: 3 } : {}
+  }));
 
   const toScreen = (p: any) =>
   reactFlowInstance.flowToScreenPosition({
@@ -131,12 +140,16 @@ export default function App() {
     }
   }, []);
 
-  const onDragNode = (event: any) => {
+  const onDragMove = (event: any) => {
     const {active, over, activatorEvent, delta} = event;
     
-    if (!over) return;
+    if (!over) {
+      setHighlightedEdgeId(null);
+      return;
+    }
 
-    const reactFlowBounds = document.querySelector('.react-flow__renderer')?.getBoundingClientRect();
+    const reactFlowBounds = reactFlowRef.current?.getBoundingClientRect();
+    console.log('reactFlowBounds:', reactFlowBounds);
     
     // Calcola la posizione finale aggiungendo il delta
     const dropPosition = {
@@ -144,10 +157,7 @@ export default function App() {
       y: activatorEvent.clientY + delta.y
     };
 
-    console.log('=== DEBUG ===');
-    console.log('Initial:', {x: activatorEvent.clientX, y: activatorEvent.clientY});
-    console.log('Delta:', delta);
-    console.log('Final drop position:', dropPosition);
+    console.log('dropPosition:', dropPosition);
 
     let insertAtIndex = -1;
 
@@ -183,76 +193,102 @@ export default function App() {
                        dropPosition.y >= pathAreaAbsolute.y && 
                        dropPosition.y <= pathAreaAbsolute.y + pathAreaAbsolute.h;
 
-      console.log(`Check between node ${index-1} and ${index}:`, {
-        dropPos: `(${dropPosition.x.toFixed(0)}, ${dropPosition.y.toFixed(0)})`,
-        areaX: `${pathAreaAbsolute.x.toFixed(0)} - ${(pathAreaAbsolute.x + pathAreaAbsolute.w).toFixed(0)}`,
-        areaY: `${pathAreaAbsolute.y.toFixed(0)} - ${(pathAreaAbsolute.y + pathAreaAbsolute.h).toFixed(0)}`,
-        isInside
-      });
+      console.log(`Check between ${index-1} and ${index}: isInside=${isInside}, edgeId=e${index}`);
 
       if (isInside && insertAtIndex === -1) {
         insertAtIndex = index;
-        console.log(`✓ SNAPPED! Will insert at index ${insertAtIndex}`);
+        setHighlightedEdgeId(`e${index}`);
+        console.log('Highlighted:', `e${index}`);
+      }
+    });
+
+    if (insertAtIndex === -1) {
+      setHighlightedEdgeId(null);
+      console.log('No highlight');
+    }
+  }
+
+  const onDragEnd = (event: any) => {
+    const {active, over, activatorEvent, delta} = event;
+    
+    if (!over) return;
+
+    const reactFlowBounds = reactFlowRef.current?.getBoundingClientRect();
+    
+    // Calcola la posizione finale aggiungendo il delta
+    const dropPosition = {
+      x: activatorEvent.clientX + delta.x,
+      y: activatorEvent.clientY + delta.y
+    };
+
+    let insertAtIndex = -1;
+
+    nodes.forEach((node, index) => {
+      if (index === 0) return; // Salta il primo nodo
+
+      const prevNode = nodes[index - 1];
+      
+      const nodeScreenPos = reactFlowInstance.flowToScreenPosition(node.position);
+      const prevNodeScreenPos = reactFlowInstance.flowToScreenPosition(prevNode.position);
+
+      const nodeAbsolutePos = reactFlowBounds ? {
+        x: nodeScreenPos.x + reactFlowBounds.left,
+        y: nodeScreenPos.y + reactFlowBounds.top
+      } : nodeScreenPos;
+
+      const prevNodeAbsolutePos = reactFlowBounds ? {
+        x: prevNodeScreenPos.x + reactFlowBounds.left,
+        y: prevNodeScreenPos.y + reactFlowBounds.top
+      } : prevNodeScreenPos;
+
+      const TOLERANCE = 100;
+
+      const pathAreaAbsolute = {
+        x: Math.min(prevNodeAbsolutePos.x, nodeAbsolutePos.x) - TOLERANCE,
+        y: Math.min(prevNodeAbsolutePos.y, nodeAbsolutePos.y) - TOLERANCE,
+        w: Math.abs(nodeAbsolutePos.x - prevNodeAbsolutePos.x) + (TOLERANCE * 2),
+        h: Math.abs(nodeAbsolutePos.y - prevNodeAbsolutePos.y) + (TOLERANCE * 2)
+      };
+
+      const isInside = dropPosition.x >= pathAreaAbsolute.x && 
+                       dropPosition.x <= pathAreaAbsolute.x + pathAreaAbsolute.w &&
+                       dropPosition.y >= pathAreaAbsolute.y && 
+                       dropPosition.y <= pathAreaAbsolute.y + pathAreaAbsolute.h;
+
+      if (isInside && insertAtIndex === -1) {
+        insertAtIndex = index;
       }
     });
 
     // Se hai trovato una posizione valida, inserisci il nodo
     if (insertAtIndex !== -1) {
-      const nodeType = active.data.current.type as FlowNodeType;
-      console.log(`Adding node of type ${nodeType} at index ${insertAtIndex}`);
+      console.log("Active:", active.id);
+      const nodeType = active.id as FlowNodeType;
       
       setNodeGraph((prevGraph) => {
-        const newNode: FlowNode = {
-          id: `node-${NodeGraph.incrementIdCounter()}`,
-          type: nodeType,
-          position: { x: 250, y: 100 * insertAtIndex },
-          data: { 
-            value: nodeType.toString().charAt(0),
-            ...(nodeType === FlowNodeType.DECISION ? {
-              condition: '',
-              trueBranch: new NodeGraph([]),
-              falseBranch: new NodeGraph([]),
-            } : {})
-          }
-        };
-
-        const updatedGraph = new NodeGraph([...prevGraph.nodes]);
-        updatedGraph.addNodeAt(insertAtIndex, newNode);
-
-        // Se è un DECISION node, aggiungi anche il MERGE
-        if (nodeType === FlowNodeType.DECISION) {
-          const newMergeNode: FlowNode = {
-            id: `node-${NodeGraph.incrementIdCounter()}`,
-            type: FlowNodeType.MERGE,
-            position: { x: 250, y: 100 * (insertAtIndex + 1) },
-            data: { value: "merge" }
-          };
-          updatedGraph.addNodeAt(insertAtIndex + 1, newMergeNode);
-        }
-
-        return updatedGraph;
+        onAddNode(nodeType);
+        return prevGraph;
       });
-    } else {
-      console.log('✗ No valid drop position found');
     }
   }
  
   return (
-    <DndContext onDragEnd={onDragNode}>
+    <DndContext onDragStart={() => setHighlightedEdgeId(null)} onDragMove={onDragMove} onDragEnd={onDragEnd}>
       <div className='w-full border text-center p-4'>
         Topbar (Work in Progress)
       </div>
       <div className='flex'>
         <div className='border min-w-50 flex flex-col gap-4 p-4'>
-          <DraggableBlock type={FlowNodeType.DEFINITION} className="bg-purple-400" id={'1'} />
-          <DraggableBlock type={FlowNodeType.DECISION} className="bg-green-400" id={'2'} />
+          <DraggableBlock type={FlowNodeType.DEFINITION} className="bg-purple-400" id={FlowNodeType.DEFINITION} />
+          <DraggableBlock type={FlowNodeType.DECISION} className="bg-green-400" id={FlowNodeType.DECISION} />
         </div>
         <div className='w-full h-screen'>
             <DroppableArea className="w-full h-full border border-red-500">
               <ReactFlow
+              ref={reactFlowRef}
               edgeTypes={NodeEdgeTypes}
               nodes={nodes}
-              edges={edges}
+              edges={styledEdges}
               nodeTypes={FlowNodeTypes}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
