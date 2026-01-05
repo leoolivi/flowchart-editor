@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ReactFlow, addEdge, Background, useNodesState, useEdgesState, reconnectEdge, useReactFlow} from '@xyflow/react';
+import { ReactFlow, addEdge, Background, useNodesState, useEdgesState, reconnectEdge, useReactFlow, type Edge} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import NodeGraph, { type FlowNode } from './models/NodeGraph';
 import { FlowNodeType } from './models/NodeGraph';
@@ -33,22 +33,27 @@ export default function App() {
     {id:'ne', type: FlowNodeType.END, position: { x: 250, y: 200 }, data: { value: 'End' }, index: 1},
   ]));
 
-  const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(null);
-
+  
   const reactFlowRef = useRef<any>(null);
-
+  
   const graph = useMemo(() => {
     console.log("Generating graph from nodeGraph:", nodeGraph);
     return Renderer.returnGraph(nodeGraph);
   }, [nodeGraph]);
-
+  
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges);
   
+  const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(null);
+  /* const [styledEdges, setStyledEdges] = useState<Edge[]>(edges.map(edge => ({
+      ...edge,
+      style: edge.id === highlightedEdgeId ? { stroke: 'red', strokeWidth: 3 } : {}
+  }))); */
+  
   const edgeReconnectSuccessful = useRef(true);
-
+  
   const reactFlowInstance = useReactFlow();
-
+  
   useEffect(() => {
     setNodes(graph.nodes);
     setEdges(graph.edges);
@@ -88,8 +93,28 @@ export default function App() {
     edgeReconnectSuccessful.current = true;
   }, []);
 
-  const onAddNode = useCallback((type: FlowNodeType) => {
+  const onAddNode = (type: FlowNodeType, edgeId: string) => {
     console.log("Adding node of type:", type);
+
+    let edge = edges.find(edge => edge.id === edgeId);
+    
+    if (!edge) {
+      console.warn("Edge not found for id:", edgeId);
+      return;
+    }
+
+    let sourceNode = nodes.find(node => node.id === edge!.source);
+    let targetNode = nodes.find(node => node.id === edge!.target);
+
+    if (!sourceNode || !targetNode) {
+      console.warn("Source or target node not found for edge:", edge);
+      return;
+    }
+
+    switch (sourceNode.type) {
+      case FlowNodeType.DECISION:
+    }
+
     switch (type) {
       case FlowNodeType.DEFINITION:
         setNodeGraph((prevGraph) => {
@@ -138,7 +163,7 @@ export default function App() {
         console.warn("Unsupported node type for addition:", type);
         return;
     }
-  }, []);
+  };
 
   const onDragMove = (event: any) => {
     const {active, over, activatorEvent, delta} = event;
