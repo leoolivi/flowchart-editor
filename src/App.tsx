@@ -225,94 +225,126 @@ export default function App() {
   }
 
   const onDragEnd = (event: any) => {
-  const {active, over, activatorEvent, delta} = event;
-  
-  if (!over) return;
-
-  const reactFlowBounds = reactFlowRef.current?.getBoundingClientRect();
-  
-  const dropPosition = {
-    x: activatorEvent.clientX + delta.x,
-    y: activatorEvent.clientY + delta.y
-  };
-
-  let insertAtIndex = -1;
-  let insertBeforeId: string | undefined = undefined;
-  let targetNodePosition = { x: 250, y: 100 }; // posizione di default
-
-  nodes.forEach((node, index) => {
-    if (index === 0) return;
-
-    const prevNode = nodes[index - 1];
+    const {active, over, activatorEvent, delta} = event;
     
-    const nodeScreenPos = reactFlowInstance.flowToScreenPosition(node.position);
-    const prevNodeScreenPos = reactFlowInstance.flowToScreenPosition(prevNode.position);
+    if (!over) return;
 
-    const nodeAbsolutePos = reactFlowBounds ? {
-      x: nodeScreenPos.x + reactFlowBounds.left,
-      y: nodeScreenPos.y + reactFlowBounds.top
-    } : nodeScreenPos;
-
-    const prevNodeAbsolutePos = reactFlowBounds ? {
-      x: prevNodeScreenPos.x + reactFlowBounds.left,
-      y: prevNodeScreenPos.y + reactFlowBounds.top
-    } : prevNodeScreenPos;
-
-    const TOLERANCE = 100;
-
-    const pathAreaAbsolute = {
-      x: Math.min(prevNodeAbsolutePos.x, nodeAbsolutePos.x) - TOLERANCE,
-      y: Math.min(prevNodeAbsolutePos.y, nodeAbsolutePos.y) - TOLERANCE,
-      w: Math.abs(nodeAbsolutePos.x - prevNodeAbsolutePos.x) + (TOLERANCE * 2),
-      h: Math.abs(nodeAbsolutePos.y - prevNodeAbsolutePos.y) + (TOLERANCE * 2)
+    const reactFlowBounds = reactFlowRef.current?.getBoundingClientRect();
+    
+    const dropPosition = {
+      x: activatorEvent.clientX + delta.x,
+      y: activatorEvent.clientY + delta.y
     };
 
-    const isInside = dropPosition.x >= pathAreaAbsolute.x && 
-                     dropPosition.x <= pathAreaAbsolute.x + pathAreaAbsolute.w &&
-                     dropPosition.y >= pathAreaAbsolute.y && 
-                     dropPosition.y <= pathAreaAbsolute.y + pathAreaAbsolute.h;
+    let insertAtIndex = -1;
+    let insertBeforeId: string | undefined = undefined;
+    let targetNodePosition = { x: 250, y: 100 }; // posizione di default
 
-    if (isInside && insertAtIndex === -1) {
-      insertAtIndex = index;
-      insertBeforeId = node.id;
-      // Calcola la posizione intermedia tra i due nodi
-      targetNodePosition = {
-        x: (prevNode.position.x + node.position.x) / 2,
-        y: (prevNode.position.y + node.position.y) / 2
+    nodes.forEach((node, index) => {
+      if (index === 0) return;
+
+      const prevNode = nodes[index - 1];
+      
+      const nodeScreenPos = reactFlowInstance.flowToScreenPosition(node.position);
+      const prevNodeScreenPos = reactFlowInstance.flowToScreenPosition(prevNode.position);
+
+      const nodeAbsolutePos = reactFlowBounds ? {
+        x: nodeScreenPos.x + reactFlowBounds.left,
+        y: nodeScreenPos.y + reactFlowBounds.top
+      } : nodeScreenPos;
+
+      const prevNodeAbsolutePos = reactFlowBounds ? {
+        x: prevNodeScreenPos.x + reactFlowBounds.left,
+        y: prevNodeScreenPos.y + reactFlowBounds.top
+      } : prevNodeScreenPos;
+
+      const TOLERANCE = 100;
+
+      const pathAreaAbsolute = {
+        x: Math.min(prevNodeAbsolutePos.x, nodeAbsolutePos.x) - TOLERANCE,
+        y: Math.min(prevNodeAbsolutePos.y, nodeAbsolutePos.y) - TOLERANCE,
+        w: Math.abs(nodeAbsolutePos.x - prevNodeAbsolutePos.x) + (TOLERANCE * 2),
+        h: Math.abs(nodeAbsolutePos.y - prevNodeAbsolutePos.y) + (TOLERANCE * 2)
       };
-      return;
-    }
-  });
 
-  if (insertAtIndex !== -1) {
-    console.log("Active:", active.id);
-    const nodeType = active.id as FlowNodeType;
-    
-    setNodeGraph((prevGraph) => {
-      const res = Finder.findNodeAndGraphById(prevGraph, insertBeforeId!);
-      if (!res) {
-        console.warn("Could not find node to insert before with id:", insertBeforeId);
-        return prevGraph;
+      const isInside = dropPosition.x >= pathAreaAbsolute.x && 
+                      dropPosition.x <= pathAreaAbsolute.x + pathAreaAbsolute.w &&
+                      dropPosition.y >= pathAreaAbsolute.y && 
+                      dropPosition.y <= pathAreaAbsolute.y + pathAreaAbsolute.h;
+
+      if (isInside && insertAtIndex === -1) {
+        insertAtIndex = index;
+        insertBeforeId = node.id;
+        // Calcola la posizione intermedia tra i due nodi
+        targetNodePosition = {
+          x: (prevNode.position.x + node.position.x) / 2,
+          y: (prevNode.position.y + node.position.y) / 2
+        };
+        return;
       }
-      const {node, graph} = res;
-
-      const updatedGraph = graph.addNodeAt(node.index!, {
-        id: `node-${NodeGraph.incrementIdCounter()}`,
-        type: nodeType,
-        position: targetNodePosition, // USA LA POSIZIONE CALCOLATA
-        data: { 
-          value: nodeType.toString().charAt(0),
-          trueBranch: nodeType === FlowNodeType.DECISION ? new NodeGraph([]) : undefined,
-          falseBranch: nodeType === FlowNodeType.DECISION ? new NodeGraph([]) : undefined,
-          condition: nodeType === FlowNodeType.DECISION ? '' : undefined,
-        }
-      });
-      console.log("Updated graph after insertion:", updatedGraph);
-      // IMPORTANTE: Ritorna un NUOVO oggetto NodeGraph per forzare il re-render
-      return new NodeGraph(updatedGraph.nodes);
     });
+
+    if (insertAtIndex !== -1) {
+      console.log("Active:", active.id);
+      const nodeType = active.id as FlowNodeType;
+        const res = Finder.findNodeAndGraphById(nodeGraph, insertBeforeId!);
+        if (!res) {
+          console.warn("Could not find node to insert before with id:", insertBeforeId);
+        }
+        const {node} = res!;
+
+        switch (nodeType) {
+          case FlowNodeType.DEFINITION:
+            setNodeGraph((prevGraph) => {
+              const newNode = {
+                id: `node-${NodeGraph.incrementIdCounter()}`,
+                type: nodeType,
+                position: { x: 250, y: 100 * prevGraph.nodes.length },
+                data: { 
+                  value: nodeType.toString().charAt(0),
+                }
+              };
+              const updatedGraph = new NodeGraph([...prevGraph.nodes]);
+              updatedGraph.addNodeAt(node.index!, newNode)
+              return updatedGraph;
+            });
+            break;
+          case FlowNodeType.DECISION:
+            setNodeGraph((prevGraph) => {
+              const newNode: FlowNode = {
+                id: `node-${NodeGraph.incrementIdCounter()}`,
+                type: nodeType,
+                position: { x: 250, y: 100 * prevGraph.nodes.length },
+                data: { 
+                  value: nodeType.toString().charAt(0),
+                  condition: '',
+                  trueBranch: new NodeGraph([]),
+                  falseBranch: new NodeGraph([]),
+                }
+              };
+
+              const newMergeNode: FlowNode = {
+                id: `node-${NodeGraph.incrementIdCounter()}`,
+                type: FlowNodeType.MERGE,
+                position: { x: 250, y: 100 * prevGraph.nodes.length },
+                data: {
+                  value: "merge"
+                }
+              };
+              const updatedGraph = new NodeGraph([...prevGraph.nodes]);
+              updatedGraph.addNodeAt(node.index!, newNode);
+              updatedGraph.addNodeAt(node.index!, newMergeNode);
+              return updatedGraph;
+            });
+            break;
+          default:
+            console.warn("Unsupported node type for addition:", nodeType);
+            return;
+        }
+        console.log("Updated graph after insertion:", nodeGraph);
+        return new NodeGraph(nodeGraph.nodes); // Return a new instance to trigger re-render
+    }
   }
-}
  
   return (
     <DndContext onDragStart={() => setHighlightedEdgeId(null)} onDragMove={onDragMove} onDragEnd={onDragEnd}>
