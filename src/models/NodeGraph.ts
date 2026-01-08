@@ -59,6 +59,72 @@ export default class NodeGraph {
         return this;
     }
 
+    deepClone(): NodeGraph {
+        const clonedNodes = this.nodes.map(node => this.cloneNode(node));
+        return new NodeGraph(clonedNodes);
+    }
+    
+    private cloneNode(node: FlowNode): FlowNode {
+        return {
+            ...node,
+            data: {
+                ...node.data,
+                trueBranch: node.data.trueBranch?.deepClone(),
+                falseBranch: node.data.falseBranch?.deepClone(),
+            }
+        };
+    }
+    
+    // Metodo che inserisce un nodo e restituisce un nuovo grafo
+    insertNodeAtPath(path: string[], index: number, newNode: FlowNode): NodeGraph {
+        if (path.length === 0) {
+            // Siamo nel grafo corrente
+            const newGraph = this.deepClone();
+            newGraph.addNodeAt(index, newNode);
+            console.log("simple insertion")
+            this.nodes = newGraph.nodes; // TODO: Fix this step in each adding (efficiently)
+            return newGraph;
+        }
+        
+        // Dobbiamo andare più in profondità
+        const [currentNodeId, ...remainingPath] = path;
+        const currentNodeIndex = this.nodes.findIndex(n => n.id === currentNodeId);
+        
+        if (currentNodeIndex === -1) {
+            throw new Error(`Node ${currentNodeId} not found`);
+        }
+        
+        const newGraph = this.deepClone();
+        const currentNode = newGraph.nodes[currentNodeIndex];
+        console.log("Found node:", currentNode);
+        
+        // FIXME: Fix decision adding
+        // Ricorsivamente aggiorna il sottografo appropriato
+        if (currentNode.type === FlowNodeType.DECISION) {
+            if (currentNode.data.trueBranch) {
+            currentNode.data.trueBranch = currentNode.data.trueBranch.insertNodeAtPath(remainingPath, index, newNode);
+            }
+            if (currentNode.data.falseBranch) {
+            currentNode.data.falseBranch = currentNode.data.falseBranch.insertNodeAtPath(remainingPath, index, newNode);
+            }
+        } else if (currentNode.type === FlowNodeType.LOOP) {
+            if (currentNode.data.trueBranch) {
+            currentNode.data.trueBranch = currentNode.data.trueBranch.insertNodeAtPath(remainingPath, index, newNode);
+            }
+        } else if (currentNode.type === FlowNodeType.MERGE) {
+            if (currentNode.data.trueBranch) {
+            currentNode.data.trueBranch = currentNode.data.trueBranch.insertNodeAtPath(remainingPath, index, newNode);
+            }
+        } else if (currentNode.type === FlowNodeType.DEFINITION) {
+            if (currentNode.data.trueBranch) {
+            currentNode.data.trueBranch = currentNode.data.trueBranch.insertNodeAtPath(remainingPath, index, newNode);
+            }
+        }
+        
+        this.nodes = newGraph.nodes;
+        return newGraph;
+    }
+
 }
 
 export interface FlowNode extends Node {
