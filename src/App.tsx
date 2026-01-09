@@ -7,7 +7,6 @@ import {
   useEdgesState,
   reconnectEdge,
   useReactFlow,
-  type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import NodeGraph, { type FlowNode } from "./models/NodeGraph";
@@ -22,8 +21,6 @@ import { DndContext } from "@dnd-kit/core";
 import DraggableBlock from "./components/DraggableBlock";
 import DroppableArea from "./components/DroppableArea";
 import { DefaultNodeEdge } from "./components/NodeEdge";
-import { Finder } from "./utility/NodeFinder";
-
 const FlowNodeTypes = {
   definition: DefinitionNode,
   decision: DecisionNode,
@@ -334,37 +331,38 @@ export default function App() {
 
     if (insertAtIndex !== -1) {
       console.log("Active:", active.id);
-      const nodeType = active.id as FlowNodeType;
-      const res = Finder.findNodeAndGraphById(nodeGraph, insertBeforeId!);
+      const newNodeType = active.id as FlowNodeType;
+      console.log("Inserting at ")
+      const res = nodeGraph.findNodeAndPathById(insertBeforeId!);
       if (!res) {
         console.warn(
           "Could not find node to insert before with id:",
           insertBeforeId
         );
       }
-      const { node, prevNode, path } = res!;
+      const { node, path } = res!;
 
       let newNode: FlowNode;
       let newMergeNode: FlowNode | undefined;
 
-      switch (nodeType) {
+      switch (newNodeType) {
         case FlowNodeType.DEFINITION:
           newNode = {
             id: `node-${NodeGraph.incrementIdCounter()}`,
-            type: nodeType,
+            type: newNodeType,
             position: { x: 250, y: 100 * graph.nodes.length },
             data: {
-              value: nodeType.toString().charAt(0),
+              value: newNodeType.toString().charAt(0),
             },
           };
           break;
         case FlowNodeType.DECISION:
           newNode = {
             id: `node-${NodeGraph.incrementIdCounter()}`,
-            type: nodeType,
+            type: newNodeType,
             position: { x: 250, y: 100 * graph.nodes.length },
             data: {
-              value: nodeType.toString().charAt(0),
+              value: newNodeType.toString().charAt(0),
               condition: "",
               trueBranch: new NodeGraph([]),
               falseBranch: new NodeGraph([]),
@@ -381,7 +379,7 @@ export default function App() {
           };
           break;
         default:
-          console.warn("Unsupported node type for addition:", nodeType);
+          console.warn("Unsupported node type for addition:", newNodeType);
           return;
       }
 
@@ -398,8 +396,8 @@ export default function App() {
           break;
         case FlowNodeType.END:
           console.log(`new node at idx ${node.index!}:`, newNode);
-          if (newMergeNode) updatedGraph.insertNodeAtPath(path, node.index!, newMergeNode);
           updatedGraph.insertNodeAtPath(path, node.index!, newNode);
+          if (newMergeNode) updatedGraph.insertNodeAtPath(path, node.index!, newMergeNode);
           console.log("Updated graph: ", updatedGraph);
           break;
       }

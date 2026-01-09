@@ -1,4 +1,5 @@
 import type { Node } from '@xyflow/react';
+import type { GraphPath } from '../types';
 
 export default class NodeGraph {
     nodes: FlowNode[] = [];
@@ -74,9 +75,43 @@ export default class NodeGraph {
             }
         };
     }
+
+    findNodeAndPathById(id: string, path: GraphPath = []): {node: FlowNode, prevNode: FlowNode, path: GraphPath} | undefined {
+        for (const node of this.nodes) {
+            switch (node.type) {
+                case FlowNodeType.DEFINITION:
+                    if (node.id == id) {
+                        let prevNode = this.nodes.at(node.index! - 1)!;
+                        return {node, prevNode, path};
+                    }
+                    break;
+                case FlowNodeType.DECISION:
+                    if (node.id == id) {
+                        let prevNode = this.nodes.at(node.index! - 1)!;
+                        return {node, prevNode, path};
+                    };
+                    
+                    const resultTrue = node.data.trueBranch!.findNodeAndPathById(id, [...path, {nodeId: node.id, branch: "true"}]);
+                    if (resultTrue) return resultTrue;
+                    
+                    const resultFalse = node.data.falseBranch!.findNodeAndPathById(id, [...path, {nodeId: node.id, branch: "false"}]);
+                    if (resultFalse) return resultFalse;
+                    
+                    break;
+                case FlowNodeType.END:
+                    if (node.id == id) {
+                        let prevNode = this.nodes.at(node.index! - 1)!;
+                        return {node, prevNode, path};
+                    };
+                    break;
+            }
+        }
+        return undefined;
+    }
     
     // Metodo che inserisce un nodo e restituisce un nuovo grafo
     insertNodeAtPath(path: string[], index: number, newNode: FlowNode): NodeGraph {
+
         if (path.length === 0) {
             // Siamo nel grafo corrente
             const newGraph = this.deepClone();
