@@ -76,27 +76,51 @@ export default class NodeGraph {
         };
     }
 
-    findNodeAndPathById(id: string, path: GraphPath = []): {node: FlowNode, prevNode: FlowNode, path: GraphPath} | undefined {
+    findNodeAndPathById(id: string, path: GraphPath = [], branch: "true" | "false" = "true"): {node: FlowNode, prevNode: FlowNode, path: GraphPath} | undefined {
+        console.log("Looking for: ", id);
+
+        let resultFalse, resultTrue, prevNode;
         for (const node of this.nodes) {
             switch (node.type) {
+                case FlowNodeType.START:
+                    if (node.id == id) {
+                        prevNode = this.nodes.at(node.index! - 1)!;
+                        return {node, prevNode, path};
+                    };
+                    break;
                 case FlowNodeType.DEFINITION:
                     if (node.id == id) {
-                        let prevNode = this.nodes.at(node.index! - 1)!;
+                        prevNode = this.nodes.at(node.index! - 1)!;
                         return {node, prevNode, path};
                     }
                     break;
                 case FlowNodeType.DECISION:
                     if (node.id == id) {
-                        let prevNode = this.nodes.at(node.index! - 1)!;
+                        prevNode = this.nodes.at(node.index! - 1)!;
                         return {node, prevNode, path};
                     };
-                    
-                    const resultTrue = node.data.trueBranch!.findNodeAndPathById(id, [...path, {nodeId: node.id, branch: "true"}]);
+
+                    resultTrue = node.data.trueBranch!.findNodeAndPathById(id, [...path, {nodeId: node.id, branch: "true"}]);
                     if (resultTrue) return resultTrue;
                     
-                    const resultFalse = node.data.falseBranch!.findNodeAndPathById(id, [...path, {nodeId: node.id, branch: "false"}]);
+                    resultFalse = node.data.falseBranch!.findNodeAndPathById(id, [...path, {nodeId: node.id, branch: "false"}]);
                     if (resultFalse) return resultFalse;
                     
+                    break;
+                case FlowNodeType.MERGE:
+                    prevNode = this.nodes.at(node.index! - 1)!;
+                    console.log("Previous decision node: ", prevNode);
+
+                    if (node.id == id) {
+                        let decisionPath: GraphPath = [...path, {nodeId:prevNode.id, branch:branch}]
+                        return {node, prevNode, path: decisionPath};
+                    }
+
+                    resultTrue = prevNode!.data.trueBranch!.findNodeAndPathById(id, [...path, {nodeId: prevNode!.id, branch: "true"}]);
+                    if (resultTrue) return resultTrue;
+                    resultFalse = prevNode!.data.falseBranch!.findNodeAndPathById(id, [...path, {nodeId: prevNode!.id, branch: "false"}]);
+                    if (resultFalse) return resultFalse;
+
                     break;
                 case FlowNodeType.END:
                     if (node.id == id) {
@@ -110,7 +134,7 @@ export default class NodeGraph {
     }
     
     // Metodo che inserisce un nodo e restituisce un nuovo grafo
-    insertNodeAtPath(path: string[], index: number, newNode: FlowNode): NodeGraph {
+    insertNodeAtPath(path: GraphPath, index: number, newNode: FlowNode): NodeGraph {
 
         if (path.length === 0) {
             // Siamo nel grafo corrente
@@ -122,11 +146,11 @@ export default class NodeGraph {
         }
         
         // Dobbiamo andare più in profondità
-        const [currentNodeId, ...remainingPath] = path;
-        const currentNodeIndex = this.nodes.findIndex(n => n.id === currentNodeId);
+        const [currentGraphNode, ...remainingPath] = path;
+        const currentNodeIndex = this.nodes.findIndex(n => n.id === currentGraphNode.nodeId);
         
         if (currentNodeIndex === -1) {
-            throw new Error(`Node ${currentNodeId} not found`);
+            throw new Error(`Node ${currentGraphNode.nodeId} not found`);
         }
         
         const newGraph = this.deepClone();

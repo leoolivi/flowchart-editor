@@ -4,3 +4,10 @@ export interface Rect {
     w: number,
     h: number
 }
+
+export type GraphPath = GraphPathNode[];
+
+export type GraphPathNode = {
+    nodeId: string;
+    branch: "true" | "false";
+}
