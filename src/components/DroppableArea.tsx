@@ -7,7 +7,7 @@ interface DroppableAreaProps {
 
 export default function DroppableArea({children, className}: DroppableAreaProps) {
 
-    const {isOver, setNodeRef} = useDroppable({
+    const {setNodeRef} = useDroppable({
         id: 'droppable',
     });
 

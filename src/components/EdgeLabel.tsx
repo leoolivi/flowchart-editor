@@ -1,5 +1,3 @@
-import React from 'react';
-
 const EdgeLabel = ({ x, y, label }: { x: number; y: number; label: string }) => {
   return (
     <div

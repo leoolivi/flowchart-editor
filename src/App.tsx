@@ -9,7 +9,6 @@ import {
   useReactFlow,
   type Edge,
   type Node,
-  Position,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import NodeGraph, { FlowNodeType } from "./models/NodeGraph";
@@ -49,7 +48,7 @@ export const NodeEdgeTypes = {
  * Calculates the approximate position of a handle on a node.
  * Used for accurate edge distance calculations.
  */
-const getHandlePosition = (node: Node, handleId?: string | null): Point => {
+/* const getHandlePosition = (node: Node, handleId?: string | null): Point => {
   const x = node.position.x;
   const y = node.position.y;
   const width = node.measured?.width ?? 150; // Fallback width
@@ -90,7 +89,7 @@ const getHandlePosition = (node: Node, handleId?: string | null): Point => {
   // But simpler: return center if unsure, or standard Top/Bottom.
   
   return { x: x + width / 2, y: y + height / 2 }; 
-};
+}; */
 
 // Improved helper that takes isTarget flag
 const getRefinedHandlePosition = (node: Node, handleId: string | null | undefined, isTarget: boolean): Point => {
