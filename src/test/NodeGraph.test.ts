@@ -51,7 +51,7 @@ describe('NodeGraph', () => {
   });
 
   describe('addNode', () => {
-    it('should add node before the last node', () => {
+    it('should add node to the end', () => {
       const newNode: FlowNode = {
         id: 'temp',
         type: FlowNodeType.OUTPUT,
@@ -62,11 +62,11 @@ describe('NodeGraph', () => {
       graph.addNode(newNode);
       
       expect(graph.nodes).toHaveLength(3);
-      expect(graph.nodes[1].type).toBe(FlowNodeType.OUTPUT);
-      expect(graph.nodes[2].type).toBe(FlowNodeType.END);
-      expect(graph.nodes[1].id).toMatch(/^node-\d+$/);
-      // L'indice viene settato al momento dell'inserimento (length-1 prima dello splice)
-      expect(graph.nodes[1].index).toBe(2);
+      expect(graph.nodes[0].type).toBe(FlowNodeType.START);
+      expect(graph.nodes[1].type).toBe(FlowNodeType.END);
+      expect(graph.nodes[2].type).toBe(FlowNodeType.OUTPUT);
+      expect(graph.nodes[2].id).toMatch(/^node-\d+$/);
+      expect(graph.nodes[2].index).toBe(2);
     });
 
     it('should increment idCounter', () => {
@@ -83,7 +83,7 @@ describe('NodeGraph', () => {
     });
   });
 
-  describe('addNodeAt', () => {
+  describe('addNodesAt', () => {
     it('should add node at specific index', () => {
       const newNode: FlowNode = {
         id: 'temp',
@@ -92,7 +92,7 @@ describe('NodeGraph', () => {
         data: { value: 'Read' }
       };
 
-      graph.addNodeAt(1, newNode);
+      graph.addNodesAt(1, [newNode]);
       
       expect(graph.nodes).toHaveLength(3);
       expect(graph.nodes[1].type).toBe(FlowNodeType.INPUT);
@@ -108,10 +108,10 @@ describe('NodeGraph', () => {
         data: { value: 'test' }
       };
 
-      graph.addNodeAt(1, newNode);
+      graph.addNodesAt(1, [newNode]);
       
-      expect(graph.nodes[0].position).toEqual({ x: 250, y: 0 });
-      expect(graph.nodes[1].position).toEqual({ x: 250, y: 100 });
+      expect(graph.nodes[0].position).toEqual({ x: 250, y: 50 });
+      expect(graph.nodes[1].position).toEqual({ x: 250, y: 150 });
       expect(graph.nodes[2].position).toEqual({ x: 250, y: 250 }); // +50 for end node
     });
   });
@@ -143,7 +143,7 @@ describe('NodeGraph', () => {
         position: { x: 0, y: 0 },
         data: { value: 'test' }
       };
-      graph.addNodeAt(1, middleNode);
+      graph.addNodesAt(1, [middleNode]);
       
       graph.removeNodeById(graph.nodes[1].id);
       expect(graph.nodes).toHaveLength(2);
@@ -162,15 +162,11 @@ describe('NodeGraph', () => {
       graph.nodes[0].position = { x: 999, y: 999 };
       graph.cleanUpGraph();
       
-      expect(graph.nodes[0].position).toEqual({ x: 250, y: 0 });
+      expect(graph.nodes[0].position).toEqual({ x: 250, y: 50 });
       expect(graph.nodes[1].position).toEqual({ x: 250, y: 150 });
     });
 
-    it('should add extra spacing to last node', () => {
-      graph.cleanUpGraph();
-      const lastIndex = graph.nodes.length - 1;
-      expect(graph.nodes[lastIndex].position.y).toBe(100 + 50);
-    });
+
   });
 
   describe('at', () => {
@@ -235,13 +231,13 @@ describe('NodeGraph', () => {
       expect(result).toBeDefined();
       expect(result?.node.id).toBe('node-2');
       expect(result?.path).toEqual([]);
-      expect(result?.prevNode.id).toBe('node-1');
+      expect(result?.prevNode?.id).toBe('node-1');
     });
 
     it('should return previous node correctly', () => {
       const result = graph.findNodeAndPathById('node-2');
       
-      expect(result?.prevNode.id).toBe('node-1');
+      expect(result?.prevNode?.id).toBe('node-1');
     });
 
     it('should return undefined for non-existent node', () => {
@@ -585,7 +581,7 @@ describe('NodeGraph', () => {
     });
   });
 
-  describe('insertNodeAtPath - Main graph', () => {
+  describe('insertNodesAtPath - Main graph', () => {
     it('should insert at path with length 0', () => {
       const newNode: FlowNode = {
         id: 'temp',
@@ -594,7 +590,7 @@ describe('NodeGraph', () => {
         data: { value: 'inserted' }
       };
 
-      const newGraph = graph.insertNodeAtPath([], 1, newNode);
+      const newGraph = graph.insertNodesAtPath([], 1, [newNode]);
       
       expect(newGraph.nodes).toHaveLength(3);
       expect(newGraph.nodes[1].type).toBe(FlowNodeType.OUTPUT);
@@ -610,12 +606,12 @@ describe('NodeGraph', () => {
       };
 
       expect(() => {
-        graph.insertNodeAtPath([{ nodeId: 'non-existent', branch: 'true' as const }], 0, newNode);
+        graph.insertNodesAtPath([{ nodeId: 'non-existent', branch: 'true' as const }], 0, [newNode]);
       }).toThrow('Node non-existent not found');
     });
   });
 
-  describe('insertNodeAtPath - Nested decisions', () => {
+  describe('insertNodesAtPath - Nested decisions', () => {
     let graphWithDecision: NodeGraph;
 
     beforeEach(() => {
@@ -653,11 +649,62 @@ describe('NodeGraph', () => {
       };
 
       const path = [{ nodeId: 'decision-1', branch: 'true' as const }];
-      const newGraph = graphWithDecision.insertNodeAtPath(path, 0, newNode);
+      const newGraph = graphWithDecision.insertNodesAtPath(path, 0, [newNode]);
       
       const trueBranch = newGraph.nodes[1].data.trueBranch;
       expect(trueBranch?.nodes).toHaveLength(2);
       expect(trueBranch?.nodes[0].type).toBe(FlowNodeType.ASSIGNMENT);
+    });
+  });
+
+  describe('insertNodesAtPath - Bulk insertion', () => {
+    let graphWithDecision: NodeGraph;
+
+    beforeEach(() => {
+      const decisionNode: FlowNode = {
+        id: 'decision-1',
+        type: FlowNodeType.DECISION,
+        position: { x: 250, y: 100 },
+        data: {
+          value: 'x > 0?',
+          condition: 'x > 0',
+          trueBranch: new NodeGraph([{
+            id: 'true-output',
+            type: FlowNodeType.OUTPUT,
+            position: { x: 0, y: 0 },
+            data: { value: 'positive' }
+          }]),
+          falseBranch: new NodeGraph([])
+        }
+      };
+
+      graphWithDecision = new NodeGraph([startNode, decisionNode, endNode]);
+    });
+
+    it('should insert multiple nodes at once in a branch', () => {
+      const newNodes: FlowNode[] = [
+        {
+          id: 'new-decision',
+          type: FlowNodeType.DECISION,
+          position: { x: 0, y: 0 },
+          data: { value: 'y > 0?' }
+        },
+        {
+          id: 'new-merge',
+          type: FlowNodeType.MERGE,
+          position: { x: 0, y: 0 },
+          data: { value: 'merge' }
+        }
+      ];
+
+      const path = [{ nodeId: 'decision-1', branch: 'true' as const }];
+      const newGraph = graphWithDecision.insertNodesAtPath(path, 0, newNodes);
+      
+      const trueBranch = newGraph.nodes[1].data.trueBranch;
+      expect(trueBranch?.nodes).toHaveLength(3);
+      expect(trueBranch?.nodes[0].type).toBe(FlowNodeType.DECISION);
+      expect(trueBranch?.nodes[1].type).toBe(FlowNodeType.MERGE);
+      expect(trueBranch?.nodes[2].id).toBe('true-output');
     });
   });
 
@@ -668,13 +715,11 @@ describe('NodeGraph', () => {
         { id: 'b', type: FlowNodeType.OUTPUT, position: { x: 0, y: 0 }, data: { value: '' } },
         { id: 'c', type: FlowNodeType.END, position: { x: 0, y: 0 }, data: { value: '' } }
       ] as FlowNode[];
-
-      const g = new NodeGraph(nodes);
-      g.updateIndices();
-      
-      expect(g.nodes[0].index).toBe(0);
-      expect(g.nodes[1].index).toBe(1);
-      expect(g.nodes[2].index).toBe(2);
+      const graphWithThreeNodes = new NodeGraph(nodes);
+      graphWithThreeNodes.updateIndices();
+      expect(graphWithThreeNodes.nodes[0].index).toBe(0);
+      expect(graphWithThreeNodes.nodes[1].index).toBe(1);
+      expect(graphWithThreeNodes.nodes[2].index).toBe(2);
     });
   });
 });

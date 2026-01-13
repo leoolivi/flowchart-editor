@@ -7,20 +7,30 @@ import {
   useEdgesState,
   reconnectEdge,
   useReactFlow,
+  type Edge,
+  type Node,
+  Position,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import NodeGraph, { type FlowNode } from "./models/NodeGraph";
-import { FlowNodeType } from "./models/NodeGraph";
+import NodeGraph, { FlowNodeType } from "./models/NodeGraph";
 import { Renderer } from "./utility/NodeRenderer";
 import DefinitionNode from "./components/DefinitionNode";
 import StartNode from "./components/StartNode";
 import EndNode from "./components/EndNode";
 import DecisionNode from "./components/DecisionNode";
 import MergeNode from "./components/MergeNode";
-import { DndContext } from "@dnd-kit/core";
+import { DndContext, type DragEndEvent, type DragMoveEvent } from "@dnd-kit/core";
 import DraggableBlock from "./components/DraggableBlock";
 import DroppableArea from "./components/DroppableArea";
 import { DefaultNodeEdge } from "./components/NodeEdge";
+import { logger } from "./utility/Logger";
+import { getDistanceToSegment, type Point } from "./utility/Geometry";
+import { handleNodeInsertion } from "./utility/GraphOperations";
+
+import OrthogonalEdge from "./components/OrthogonalEdge";
+
+// --- Configuration ---
+
 const FlowNodeTypes = {
   definition: DefinitionNode,
   decision: DecisionNode,
@@ -30,331 +40,257 @@ const FlowNodeTypes = {
 };
 
 export const NodeEdgeTypes = {
-  default: DefaultNodeEdge,
+  default: OrthogonalEdge,
+  orthogonal: OrthogonalEdge,
+};
+
+// --- Helpers ---
+
+/**
+ * Calculates the approximate position of a handle on a node.
+ * Used for accurate edge distance calculations.
+ */
+const getHandlePosition = (node: Node, handleId?: string | null): Point => {
+  const x = node.position.x;
+  const y = node.position.y;
+  const width = node.measured?.width ?? 150; // Fallback width
+  const height = node.measured?.height ?? 80; // Fallback height
+
+  // Decision Node Logic
+  if (node.type === FlowNodeType.DECISION) {
+    if (handleId === "true") {
+      return { x: x + width, y: y + height / 2 }; // Right
+    }
+    if (handleId === "false") {
+      return { x: x, y: y + height / 2 }; // Left
+    }
+    // Target is Top
+    return { x: x + width / 2, y: y };
+  }
+
+  // Standard Logic
+  // If handleId is null/undefined, it could be target (Top) or source (Bottom)
+  // Usually edges are Source -> Target.
+  // We can't distinguish purely by handleId if it's null.
+  // But usually Source is Bottom, Target is Top.
+  // For edge distance check, we use this for both ends.
+  
+  // Refinement: The edge object has sourceHandle and targetHandle.
+  // We are calling this function with specific handle IDs.
+  
+  // If we don't know, we assume center-ish or standard ports.
+  // Let's assume Top/Bottom based on usage context or return Center if unsure.
+  // But simpler:
+  // Target -> Top
+  // Source -> Bottom (unless Decision)
+  
+  // For the purpose of "is point near segment", 
+  // we treat the node as having Top/Bottom/Left/Right ports.
+  // Since we don't know if this call is for source or target just by handleId (if null),
+  // we might need to pass "isSource" flag?
+  // But simpler: return center if unsure, or standard Top/Bottom.
+  
+  return { x: x + width / 2, y: y + height / 2 }; 
+};
+
+// Improved helper that takes isTarget flag
+const getRefinedHandlePosition = (node: Node, handleId: string | null | undefined, isTarget: boolean): Point => {
+  const x = node.position.x;
+  const y = node.position.y;
+  // Use measured dimensions if available, otherwise reasonable defaults
+  const width = node.measured?.width ?? 150;
+  const height = node.measured?.height ?? 80;
+
+  if (node.type === FlowNodeType.DECISION) {
+    if (handleId === "true") return { x: x + width, y: y + height / 2 };
+    if (handleId === "false") return { x: x, y: y + height / 2 };
+    if (isTarget) return { x: x + width / 2, y: y };
+  }
+
+  if (isTarget) {
+    return { x: x + width / 2, y: y }; // Top
+  } else {
+    return { x: x + width / 2, y: y + height }; // Bottom
+  }
 };
 
 export default function App() {
-  const [nodeGraph, setNodeGraph] = useState<NodeGraph>(
-    () =>
-      new NodeGraph([
-        {
-          id: "ns",
-          type: FlowNodeType.START,
-          position: { x: 250, y: 5 },
-          data: { value: "Start" },
-          index: 0,
-        },
-        {
-          id: "ne",
-          type: FlowNodeType.END,
-          position: { x: 250, y: 200 },
-          data: { value: "End" },
-          index: 1,
-        },
-      ])
-  );
-
-  const reactFlowRef = useRef<any>(null);
-
-  const graph = useMemo(() => {
-    console.log("Generating graph from nodeGraph:", nodeGraph);
-    return Renderer.returnGraph(nodeGraph);
-  }, [nodeGraph]);
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges);
-
-  const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(
-    null
-  );
+  // --- State ---
+  
+  const [nodeGraph, setNodeGraph] = useState<NodeGraph>(() => {
+    logger.info("Initializing NodeGraph");
+    return new NodeGraph([
+      {
+        id: "ns",
+        type: FlowNodeType.START,
+        position: { x: 250, y: 5 },
+        data: { value: "Start" },
+        index: 0,
+      },
+      {
+        id: "ne",
+        type: FlowNodeType.END,
+        position: { x: 250, y: 200 },
+        data: { value: "End" },
+        index: 1,
+      },
+    ]);
+  });
 
   const edgeReconnectSuccessful = useRef(true);
+  
+  // Derived graph state (nodes/edges)
+  const graph = useMemo(() => Renderer.returnGraph(nodeGraph), [nodeGraph]);
+  
+  // React Flow State
+  const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges);
+  const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(null);
 
   const reactFlowInstance = useReactFlow();
 
+  // --- Effects ---
+
+  // Sync React Flow state with NodeGraph model
   useEffect(() => {
-    console.log("Graph updated, setting new nodes and edges");
     setNodes(graph.nodes);
     setEdges(graph.edges);
   }, [graph, setNodes, setEdges]);
 
-  const styledEdges = edges.map((edge) => ({
+  // Styling for highlighted edges
+  const styledEdges = useMemo(() => edges.map((edge) => ({
     ...edge,
     style:
-      edge.id === highlightedEdgeId ? { stroke: "red", strokeWidth: 3 } : {},
-  }));
+      edge.id === highlightedEdgeId ? { stroke: "#29B6F6", strokeWidth: 3 } : {},
+    animated: edge.id === highlightedEdgeId
+  })), [edges, highlightedEdgeId]);
+
+  // --- Handlers ---
 
   const onConnect = useCallback(
-    (params: any) =>
-      setEdges((edgesSnapshot) => addEdge(params, edgesSnapshot)),
-    []
+    (params: any) => {
+      logger.info("Connection created", params);
+      setEdges((edgesSnapshot) => addEdge(params, edgesSnapshot));
+    },
+    [setEdges]
   );
 
   const onReconnectStart = useCallback(() => {
+    logger.debug("Reconnect started");
     edgeReconnectSuccessful.current = false;
   }, []);
 
   const onReconnect = useCallback((oldEdge: any, newConnection: any) => {
+    logger.info("Reconnected edge", oldEdge, "to", newConnection);
     edgeReconnectSuccessful.current = true;
     setEdges((els) => reconnectEdge(oldEdge, newConnection, els));
-  }, []);
+  }, [setEdges]);
 
   const onReconnectEnd = useCallback((_: any, edge: { id: string }) => {
     if (!edgeReconnectSuccessful.current) {
       setEdges((eds) => eds.filter((e) => e.id !== edge.id));
     }
-
     edgeReconnectSuccessful.current = true;
-  }, []);
-  
+  }, [setEdges]);
+
+  // --- Drag & Drop Logic ---
+
+  /**
+   * Checks if the current drop position is close to any edge.
+   * Uses Flow Coordinates for high precision.
+   */
   const checkDropPositionInEdges = (
-    nodeList: typeof nodes,
-    dropPos: { x: number; y: number }
-  ): { edgeId: string; index: number } | null => {
-    for (let index = 1; index < nodeList.length; index++) {
-      const prevNode = nodeList[index - 1];
-      const node = nodeList[index];
+    dropPosScreen: Point
+  ): Edge | null => {
+    const TOLERANCE = 30; // Distance in flow units (pixels)
 
-      const nodeScreenPos = reactFlowInstance.flowToScreenPosition(
-        node.position
-      );
-      const prevNodeScreenPos = reactFlowInstance.flowToScreenPosition(
-        prevNode.position
-      );
+    // Convert Screen Coords -> Flow Coords
+    const dropPosFlow = reactFlowInstance.screenToFlowPosition(dropPosScreen);
+    
+    let closestEdge: Edge | null = null;
+    let minDistance = Number.MAX_VALUE;
 
-      const reactFlowBounds = reactFlowRef.current?.getBoundingClientRect();
-      const nodeAbsolutePos = reactFlowBounds
-        ? {
-            x: nodeScreenPos.x + reactFlowBounds.left,
-            y: nodeScreenPos.y + reactFlowBounds.top,
-          }
-        : nodeScreenPos;
+    for (const edge of styledEdges) {
+      const sourceNode = nodes.find((n) => n.id === edge.source);
+      const targetNode = nodes.find((n) => n.id === edge.target);
 
-      const prevNodeAbsolutePos = reactFlowBounds
-        ? {
-            x: prevNodeScreenPos.x + reactFlowBounds.left,
-            y: prevNodeScreenPos.y + reactFlowBounds.top,
-          }
-        : prevNodeScreenPos;
+      if (!sourceNode || !targetNode) continue;
 
-      const TOLERANCE = 100;
+      // Get Handle Positions (Flow Coords)
+      const sourcePos = getRefinedHandlePosition(sourceNode, edge.sourceHandle, false);
+      const targetPos = getRefinedHandlePosition(targetNode, edge.targetHandle, true);
 
-      const pathAreaAbsolute = {
-        x: Math.min(prevNodeAbsolutePos.x, nodeAbsolutePos.x) - TOLERANCE,
-        y: Math.min(prevNodeAbsolutePos.y, nodeAbsolutePos.y) - TOLERANCE,
-        w: Math.abs(nodeAbsolutePos.x - prevNodeAbsolutePos.x) + TOLERANCE * 2,
-        h: Math.abs(nodeAbsolutePos.y - prevNodeAbsolutePos.y) + TOLERANCE * 2,
-      };
+      // Calculate distance from point to segment
+      const distance = getDistanceToSegment(dropPosFlow, sourcePos, targetPos);
 
-      const isInside =
-        dropPos.x >= pathAreaAbsolute.x &&
-        dropPos.x <= pathAreaAbsolute.x + pathAreaAbsolute.w &&
-        dropPos.y >= pathAreaAbsolute.y &&
-        dropPos.y <= pathAreaAbsolute.y + pathAreaAbsolute.h;
-
-      if (isInside) {
-        const edge = styledEdges.find(e => e.source === prevNode.id && e.target === node.id);
-        return { edgeId: edge?.id || `e${index}`, index };
+      if (distance < TOLERANCE && distance < minDistance) {
+        minDistance = distance;
+        closestEdge = edge;
       }
+    }
+
+    if (closestEdge) {
+      // logger.debug("Drop position closest to edge", closestEdge.id, "distance:", minDistance);
+      return closestEdge;
     }
 
     return null;
   };
 
-  const onDragMove = (event: any) => {
-    const { over, activatorEvent, delta } = event;
+  const onDragMove = (event: DragMoveEvent) => {
+    const { active, over } = event;
 
     if (!over) {
-      setHighlightedEdgeId(null);
+      if (highlightedEdgeId !== null) setHighlightedEdgeId(null);
       return;
     }
 
-    // Calcola la posizione finale aggiungendo il delta
-    const dropPosition = {
-      x: activatorEvent.clientX + delta.x,
-      y: activatorEvent.clientY + delta.y,
+    const draggedRect = active.rect.current.translated;
+    if (!draggedRect) return;
+
+    // Calculate center of dragged item in Screen Coords
+    const dropPositionScreen = {
+      x: draggedRect.left + draggedRect.width / 2,
+      y: draggedRect.top + draggedRect.height / 2,
     };
 
-    console.log("dropPosition:", dropPosition);
+    const edge = checkDropPositionInEdges(dropPositionScreen);
 
-    const result = checkDropPositionInEdges(nodes, dropPosition);
-
-    if (result) {
-      setHighlightedEdgeId(result.edgeId);
-      console.log("Highlighted:", result.edgeId);
+    if (edge) {
+      if (highlightedEdgeId !== edge.id) {
+          logger.debug("Highlighting edge", edge.id);
+          setHighlightedEdgeId(edge.id);
+      }
     } else {
-      setHighlightedEdgeId(null);
-      console.log("No highlight");
+      if (highlightedEdgeId !== null) {
+          setHighlightedEdgeId(null);
+      }
     }
   };
 
-  const onDragEnd = (event: any) => {
-    const { active, over, activatorEvent, delta } = event;
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    logger.debug("Drag ended", active.id);
+
+    setHighlightedEdgeId(null);
 
     if (!over) return;
 
-    const reactFlowBounds = reactFlowRef.current?.getBoundingClientRect();
+    const draggedRect = active.rect.current.translated;
+    if (!draggedRect) return;
 
-    const dropPosition = {
-      x: activatorEvent.clientX + delta.x,
-      y: activatorEvent.clientY + delta.y,
+    const dropPositionScreen = {
+      x: draggedRect.left + draggedRect.width / 2,
+      y: draggedRect.top + draggedRect.height / 2,
     };
 
-    let insertAtIndex = -1;
-    let insertBeforeId: string | undefined = undefined;
-    let targetNodePosition = { x: 250, y: 100 };
-    let targetBranch: "true" | "false" | undefined = undefined;
+    const edge = checkDropPositionInEdges(dropPositionScreen);
 
-    nodes.forEach((node, index) => {
-      if (index === 0) return;
-
-      const prevNode = nodes[index - 1];
-
-      const nodeScreenPos = reactFlowInstance.flowToScreenPosition(
-        node.position
-      );
-      const prevNodeScreenPos = reactFlowInstance.flowToScreenPosition(
-        prevNode.position
-      );
-
-      const nodeAbsolutePos = reactFlowBounds
-        ? {
-            x: nodeScreenPos.x + reactFlowBounds.left,
-            y: nodeScreenPos.y + reactFlowBounds.top,
-          }
-        : nodeScreenPos;
-
-      const prevNodeAbsolutePos = reactFlowBounds
-        ? {
-            x: prevNodeScreenPos.x + reactFlowBounds.left,
-            y: prevNodeScreenPos.y + reactFlowBounds.top,
-          }
-        : prevNodeScreenPos;
-
-      const TOLERANCE = 100;
-
-      const pathAreaAbsolute = {
-        x: Math.min(prevNodeAbsolutePos.x, nodeAbsolutePos.x) - TOLERANCE,
-        y: Math.min(prevNodeAbsolutePos.y, nodeAbsolutePos.y) - TOLERANCE,
-        w: Math.abs(nodeAbsolutePos.x - prevNodeAbsolutePos.x) + TOLERANCE * 2,
-        h: Math.abs(nodeAbsolutePos.y - prevNodeAbsolutePos.y) + TOLERANCE * 2,
-      };
-
-      const isInside =
-        dropPosition.x >= pathAreaAbsolute.x &&
-        dropPosition.x <= pathAreaAbsolute.x + pathAreaAbsolute.w &&
-        dropPosition.y >= pathAreaAbsolute.y &&
-        dropPosition.y <= pathAreaAbsolute.y + pathAreaAbsolute.h;
-
-      if (isInside && insertAtIndex === -1) {
-        insertAtIndex = index;
-        insertBeforeId = node.id;
-        targetNodePosition = {
-          x: (prevNode.position.x + node.position.x) / 2,
-          y: (prevNode.position.y + node.position.y) / 2,
-        };
-        
-        if (prevNode.type === FlowNodeType.DECISION) {
-          targetBranch = dropPosition.x < prevNodeAbsolutePos.x ? "false" : "true";
-        }
-        return;
-      }
-    });
-
-    if (insertAtIndex !== -1) {
-      console.log("Active:", active.id);
-      const newNodeType = active.id as FlowNodeType;
-      console.log("Dropped on edge: ", over.id);
-      const res = nodeGraph.findNodeAndPathById(insertBeforeId!, undefined, targetBranch);
-      
-      if (!res) {
-        console.warn(
-          "Could not find node to insert before with id:",
-          insertBeforeId
-        );
-      }
-      
-      const { node, path } = res!;
-      console.log("Dropped on node:", node);
-      console.log("Path of the desired item is: ", path)
-
-      let newNode: FlowNode;
-      let newMergeNode: FlowNode | undefined;
-
-      switch (newNodeType) {
-        case FlowNodeType.DEFINITION:
-          newNode = {
-            id: `node-${NodeGraph.incrementIdCounter()}`,
-            type: newNodeType,
-            position: { x: 250, y: 100 * graph.nodes.length },
-            data: {
-              value: newNodeType.toString().charAt(0),
-            },
-          };
-          break;
-        case FlowNodeType.DECISION:
-          newNode = {
-            id: `node-${NodeGraph.incrementIdCounter()}`,
-            type: newNodeType,
-            position: { x: 250, y: 100 * graph.nodes.length },
-            data: {
-              value: newNodeType.toString().charAt(0),
-              condition: "",
-              trueBranch: new NodeGraph([]),
-              falseBranch: new NodeGraph([]),
-            },
-          };
-
-          newMergeNode = {
-            id: `node-${NodeGraph.incrementIdCounter()}`,
-            type: FlowNodeType.MERGE,
-            position: { x: 250, y: 100 * graph.nodes.length },
-            data: {
-              value: "merge",
-            },
-          };
-          break;
-        default:
-          console.warn("Unsupported node type for addition:", newNodeType);
-          return;
-      }
-
-      const updatedGraph = new NodeGraph([...nodeGraph.nodes]);
-      switch (node.type) {
-        case FlowNodeType.START:
-          break;
-
-        case FlowNodeType.DEFINITION:
-          console.log(`new node at idx ${node.index! + 1}:`, newNode);
-          if (newMergeNode) updatedGraph.insertNodeAtPath(path, node.index!, newMergeNode);
-          updatedGraph.insertNodeAtPath(path, node.index!, newNode);
-          console.log("Updated graph: ", updatedGraph);
-          break;
-        case FlowNodeType.MERGE:
-          console.log(`new node at idx ${node.index! + 1}:`, newNode);
-          if (newMergeNode) updatedGraph.insertNodeAtPath(path, node.index!, newMergeNode);
-          updatedGraph.insertNodeAtPath(path, 0, newNode);
-          console.log("Updated graph: ", updatedGraph);
-          break;
-        case FlowNodeType.DECISION:
-          console.log(`new node at idx ${node.index!}:`, newNode);
-          updatedGraph.insertNodeAtPath(path, node.index!, newNode);
-          if (newMergeNode) updatedGraph.insertNodeAtPath(path, node.index!+1, newMergeNode);
-          console.log("Updated graph: ", updatedGraph);
-          break;
-        case FlowNodeType.END:
-          console.log(`new node at idx ${node.index!}:`, newNode);
-          updatedGraph.insertNodeAtPath(path, node.index!, newNode);
-          if (newMergeNode) updatedGraph.insertNodeAtPath(path, node.index!+1, newMergeNode);
-          console.log("Updated graph: ", updatedGraph);
-          break;
-      }
-      console.log("Updated graph after insertion:", updatedGraph);
-      setNodeGraph(updatedGraph);
-
-      // TODO: Remove useless logging
+    if (edge) {
+      handleNodeInsertion(active.id as string, edge, nodes, nodeGraph, setNodeGraph);
     }
   };
+
   return (
     <DndContext
       onDragStart={() => setHighlightedEdgeId(null)}
@@ -380,7 +316,6 @@ export default function App() {
         <div className="w-full h-screen">
           <DroppableArea className="w-full h-full border border-red-500">
             <ReactFlow
-              ref={reactFlowRef}
               edgeTypes={NodeEdgeTypes}
               nodes={nodes}
               edges={styledEdges}

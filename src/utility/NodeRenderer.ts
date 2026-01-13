@@ -1,91 +1,178 @@
 import type { Edge, Node } from "@xyflow/react";
 import NodeGraph, { FlowNodeType, NodeEdgeType } from "../models/NodeGraph";
+import { logger } from "./Logger";
 
+/**
+ * Singleton class responsible for converting the internal NodeGraph model
+ * into React Flow nodes and edges for rendering.
+ */
 class NodeRenderer {
     
     public returnGraph(graph: NodeGraph): ReactFlowGraph {
+        logger.debug("Rendering graph with", graph.nodes.length, "nodes");
         let nodes: Node[] = [];
         let edges: Edge[] = [];
 
         graph.nodes.forEach((graphNode, index) => {
+            // logger.debug("Processing node", graphNode.id, graphNode.type);
+            
+            // Common node properties
+            const baseNode = {
+                ...graphNode,
+                type: graphNode.type.toString().toLowerCase()
+            };
 
             switch (graphNode.type) {       
                 case FlowNodeType.DEFINITION:
-                    nodes.push({...graphNode, type: graphNode.type.toString().toLowerCase()}); // Push the definition node
-                    
-                    if (index > 0 && index < nodes.length) { 
-                        edges.push({id: `e${index}`, source: nodes.at(index - 1)!.id, target: graphNode.id, type: NodeEdgeType.default}) // Connect previous node to current
-                    }
-                    break;
                 case FlowNodeType.START:
-                    nodes.push({...graphNode, type: graphNode.type.toString().toLowerCase()}); // Push the start node
-                    break;
                 case FlowNodeType.END:
-                    nodes.push({...graphNode, type: graphNode.type.toString().toLowerCase()}); // Push the end node
-                    edges.push({id: `e${index}`, source: nodes.at(index - 1)!.id, target: graphNode.id, type: NodeEdgeType.default}) // Connect previous node to end node
+                    nodes.push(baseNode);
+                    
+                    // Connect to previous node if exists
+                    if (index > 0 && index < graph.nodes.length) { 
+                        const prevNode = graph.nodes[index - 1];
+                        edges.push({
+                            id: `e-${prevNode.id}-${graphNode.id}`,
+                            source: prevNode.id,
+                            target: graphNode.id,
+                            type: NodeEdgeType.default
+                        });
+                    }
                     break;
 
                 case FlowNodeType.DECISION:
-                    nodes.push({...graphNode, type: graphNode.type.toString().toLowerCase()});
-                    // Recursively call the process for other nested branches
-                    let trueBranch = this.returnGraph(graphNode.data.trueBranch ?? new NodeGraph([]));
-                    let falseBranch = this.returnGraph(graphNode.data.falseBranch ?? new NodeGraph([]));
+                    nodes.push(baseNode);
                     
-                    // Connect decision node to true branch start
+                    // Process branches recursively
+                    const trueBranch = this.returnGraph(graphNode.data.trueBranch ?? new NodeGraph([]));
+                    const falseBranch = this.returnGraph(graphNode.data.falseBranch ?? new NodeGraph([]));
+                    
+                    // Connect Decision -> True Branch Start
                     if (trueBranch.nodes.length > 0) { 
-                        edges.push(
-                            {id: `${graphNode.id}-true`, source: graphNode.id, sourceHandle: 'true', target: trueBranch.nodes[0].id ?? graph.at(index + 1), label: 'True', type: NodeEdgeType.default}
-                        );
-                        // Add true branch nodes and edges
-                        trueBranch.nodes.forEach((node) => nodes.push(node));
-                        trueBranch.edges.forEach((edge) => edges.push(edge));
+                        const targetId = trueBranch.nodes[0].id;
+                        edges.push({
+                            id: `e-${graphNode.id}-true-${targetId}`,
+                            source: graphNode.id,
+                            sourceHandle: 'true',
+                            target: targetId,
+                            label: 'True',
+                            type: 'orthogonal'
+                        });
+                        // Add branch content
+                        nodes.push(...trueBranch.nodes);
+                        edges.push(...trueBranch.edges);
                     }
-                    // Connect decision node to false branch start
+
+                    // Connect Decision -> False Branch Start
                     if (falseBranch.nodes.length > 0) { 
-                        edges.push(
-                            {id: `${graphNode.id}-false`, source: graphNode.id, target: falseBranch.nodes[0].id, label: 'False', type: NodeEdgeType.default}
-                        );
-                        // Add false branch nodes and edges
-                        falseBranch.nodes.forEach((node) => nodes.push(node));
-                        falseBranch.edges.forEach((edge) => edges.push(edge));
+                        const targetId = falseBranch.nodes[0].id;
+                        edges.push({
+                            id: `e-${graphNode.id}-false-${targetId}`,
+                            source: graphNode.id,
+                            sourceHandle: 'false',
+                            target: targetId,
+                            label: 'False',
+                            type: 'orthogonal'
+                        });
+                        // Add branch content
+                        nodes.push(...falseBranch.nodes);
+                        edges.push(...falseBranch.edges);
                     }
 
-                    // Connect previous node to decision node
-                    if (index > 0 && index < nodes.length) { 
-                        edges.push({id: `e${index}`, source: nodes.at(index - 1)!.id, target: graphNode.id, type: NodeEdgeType.default})
+                    // Connect Previous -> Decision
+                    if (index > 0 && index < graph.nodes.length) { 
+                        const prevNode = graph.nodes[index - 1];
+                        edges.push({
+                            id: `e-${prevNode.id}-${graphNode.id}`,
+                            source: prevNode.id,
+                            target: graphNode.id,
+                            type: NodeEdgeType.default
+                        });
                     }
                     break;
+
                 case FlowNodeType.MERGE:
-                    nodes.push({...graphNode, type: graphNode.type.toString().toLowerCase()});
+                    nodes.push(baseNode);
                     
-                    if (graph.at(index - 1)?.type == FlowNodeType.DECISION) {
-                        // If the branches of the decision has nodes, connect the last node of that branch otherwise connect the decision node directly
-                        
-                        if (graph.at(index - 1)?.data!.trueBranch!.nodes!.length! > 0) {
-                            edges.push({id: `e${index}-true`, source: graph.at(index - 1)!.data!.trueBranch!.nodes!.at(-1)!.id, sourceHandle: "true", target: graphNode.id, targetHandle: 'true', type: NodeEdgeType.default})
+                    const prevNode = graph.nodes[index - 1];
+                    
+                    // Special handling if previous node is Decision (convergence)
+                    if (prevNode?.type === FlowNodeType.DECISION) {
+                        const trueBranchNodes = prevNode.data.trueBranch?.nodes ?? [];
+                        const falseBranchNodes = prevNode.data.falseBranch?.nodes ?? [];
+
+                        // Connect True Branch End -> Merge
+                        if (trueBranchNodes.length > 0) {
+                            const sourceId = trueBranchNodes[trueBranchNodes.length - 1].id;
+                            edges.push({
+                                id: `e-${sourceId}-${graphNode.id}-true`,
+                                source: sourceId,
+                                target: graphNode.id,
+                                targetHandle: 'true',
+                                type: NodeEdgeType.default
+                            });
                         } else {
-                            edges.push({id: `e${index}-true`, source: graph.at(index - 1)!.id, sourceHandle: "true", target: graphNode.id, targetHandle: 'true', type: NodeEdgeType.default})
+                            // Direct connection if empty branch
+                            edges.push({
+                                id: `e-${prevNode.id}-${graphNode.id}-true`,
+                                source: prevNode.id,
+                                sourceHandle: "true",
+                                target: graphNode.id,
+                                targetHandle: 'true',
+                                type: NodeEdgeType.default
+                            });
                         }
 
-                        if (graph.at(index - 1)?.data!.falseBranch!.nodes!.length! > 0) {
-                            edges.push({id: `e${index}-false`, source: graph.at(index - 1)!.data!.falseBranch!.nodes!.at(-1)!.id, sourceHandle: "false", target: graphNode.id, targetHandle: 'false', type: NodeEdgeType.default})
+                        // Connect False Branch End -> Merge
+                        if (falseBranchNodes.length > 0) {
+                            const sourceId = falseBranchNodes[falseBranchNodes.length - 1].id;
+                            edges.push({
+                                id: `e-${sourceId}-${graphNode.id}-false`,
+                                source: sourceId,
+                                target: graphNode.id,
+                                targetHandle: 'false',
+                                type: NodeEdgeType.default
+                            });
                         } else {
-                            edges.push({id: `e${index}-false`, source: graph.at(index - 1)!.id, sourceHandle: "false", target: graphNode.id, targetHandle: 'false', type: NodeEdgeType.default})
+                            // Direct connection if empty branch
+                            edges.push({
+                                id: `e-${prevNode.id}-${graphNode.id}-false`,
+                                source: prevNode.id,
+                                sourceHandle: "false",
+                                target: graphNode.id,
+                                targetHandle: 'false',
+                                type: NodeEdgeType.default
+                            });
+                        }
+                    } else {
+                        // Standard connection if not following a Decision node
+                        // (Fallback, though Merge usually follows Decision)
+                        if (prevNode) {
+                            edges.push({
+                                id: `e-${prevNode.id}-${graphNode.id}`,
+                                source: prevNode.id,
+                                target: graphNode.id,
+                                type: NodeEdgeType.default
+                            });
                         }
                     }
                     break;
+
                 default:
-                    console.warn("Unknown node type encountered:", graphNode.type);
-                    edges.push({id: `e${index}`, source: nodes.at(index - 1)!.id, target: graphNode.id})
+                    logger.warn("Unknown node type encountered:", graphNode.type);
+                    nodes.push(baseNode);
+                    if (index > 0) {
+                        const prevNode = graph.nodes[index - 1];
+                        edges.push({
+                            id: `e-${prevNode.id}-${graphNode.id}`,
+                            source: prevNode.id,
+                            target: graphNode.id
+                        });
+                    }
             }
         });
         
-        console.log("Graph edges:", edges);
-        console.log("Graph nodes:", nodes);
-        return {
-            nodes: nodes,
-            edges: edges
-        };
+        return { nodes, edges };
     }
 }
 
