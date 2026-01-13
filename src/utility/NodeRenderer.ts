@@ -56,7 +56,7 @@ class NodeRenderer {
                             sourceHandle: 'true',
                             target: targetId,
                             label: 'True',
-                            type: 'orthogonal'
+                            type: NodeEdgeType.default
                         });
                         // Add branch content
                         nodes.push(...trueBranch.nodes);
@@ -72,7 +72,7 @@ class NodeRenderer {
                             sourceHandle: 'false',
                             target: targetId,
                             label: 'False',
-                            type: 'orthogonal'
+                            type: NodeEdgeType.default
                         });
                         // Add branch content
                         nodes.push(...falseBranch.nodes);
@@ -166,7 +166,8 @@ class NodeRenderer {
                         edges.push({
                             id: `e-${prevNode.id}-${graphNode.id}`,
                             source: prevNode.id,
-                            target: graphNode.id
+                            target: graphNode.id,
+                            type: NodeEdgeType.default
                         });
                     }
             }

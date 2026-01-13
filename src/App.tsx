@@ -27,7 +27,7 @@ import { logger } from "./utility/Logger";
 import { getDistanceToSegment, type Point } from "./utility/Geometry";
 import { handleNodeInsertion } from "./utility/GraphOperations";
 
-import OrthogonalEdge from "./components/OrthogonalEdge";
+// import OrthogonalEdge from "./components/OrthogonalEdge";
 
 // --- Configuration ---
 
@@ -40,8 +40,7 @@ const FlowNodeTypes = {
 };
 
 export const NodeEdgeTypes = {
-  default: OrthogonalEdge,
-  orthogonal: OrthogonalEdge,
+  default: DefaultNodeEdge,
 };
 
 // --- Helpers ---
